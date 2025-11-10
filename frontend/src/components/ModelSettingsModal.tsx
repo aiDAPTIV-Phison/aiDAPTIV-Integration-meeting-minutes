@@ -376,16 +376,21 @@ export function ModelSettingsModal({
   };
 
   const handleSave = async () => {
+    // Build updated config - only update endpoints for current provider
     const updatedConfig = {
       ...modelConfig,
       apiKey: typeof apiKey === 'string' ? apiKey.trim() || null : null,
-      ollamaEndpoint: modelConfig.provider === 'ollama' && ollamaEndpoint.trim()
-        ? ollamaEndpoint.trim()
-        : null,
-      openaiCompatibleEndpoint: modelConfig.provider === 'openai-compatible' && openaiCompatibleEndpoint.trim()
-        ? openaiCompatibleEndpoint.trim()
-        : null,
     };
+    
+    // Only update ollamaEndpoint if provider is ollama
+    if (modelConfig.provider === 'ollama') {
+      updatedConfig.ollamaEndpoint = ollamaEndpoint.trim() || null;
+    }
+    
+    // Only update openaiCompatibleEndpoint if provider is openai-compatible
+    if (modelConfig.provider === 'openai-compatible') {
+      updatedConfig.openaiCompatibleEndpoint = openaiCompatibleEndpoint.trim() || null;
+    }
     setModelConfig(updatedConfig);
 
     // Save auto-generate setting
