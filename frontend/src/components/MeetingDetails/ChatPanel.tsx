@@ -101,7 +101,6 @@ export function ChatPanel({
         const { request_id } = event.payload;
         if (request_id === meeting.id) {
           setIsLoading(false);
-          streamingContentRef.current = '';
         }
       });
 
