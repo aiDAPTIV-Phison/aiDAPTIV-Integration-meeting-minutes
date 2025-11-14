@@ -321,7 +321,7 @@ pub async fn generate_summary(
                 .ok_or("OpenAI Compatible endpoint not configured")?
                 .trim_end_matches('/');
             (
-                format!("{}/v1/chat/completions", base_url),
+                format!("{}/chat/completions", base_url),
                 header::HeaderMap::new(),
             )
         }
@@ -580,7 +580,7 @@ async fn stream_chat_openai_compatible<R: Runtime>(
                 .ok_or("OpenAI Compatible endpoint not configured")?
                 .trim_end_matches('/');
             (
-                format!("{}/v1/chat/completions", base_url),
+                format!("{}/chat/completions", base_url),
                 header::HeaderMap::new(),
             )
         }
