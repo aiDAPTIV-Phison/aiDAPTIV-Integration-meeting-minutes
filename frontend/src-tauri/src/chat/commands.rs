@@ -151,20 +151,20 @@ pub async fn chat_get_meeting_context<R: Runtime>(
         .join("\n");
 
     Ok(MeetingContext {
-        meeting_id: meeting.id.clone(),
+        id: meeting.id.clone(),
         title: meeting.title.clone(),
         created_at: meeting.created_at.clone(),
+        updated_at: meeting.updated_at.clone(),
         transcript: full_transcript,
-        transcript_count: meeting.transcripts.len(),
     })
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MeetingContext {
-    pub meeting_id: String,
+    pub id: String,
     pub title: String,
     pub created_at: String,
+    pub updated_at: String,
     pub transcript: String,
-    pub transcript_count: usize,
 }
 

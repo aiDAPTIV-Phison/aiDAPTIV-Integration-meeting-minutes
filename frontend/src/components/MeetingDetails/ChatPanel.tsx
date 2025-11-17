@@ -32,11 +32,11 @@ interface Message {
 }
 
 interface MeetingContext {
-  meeting_id: string;
+  id: string;
   title: string;
   created_at: string;
+  updated_at: string;
   transcript: string;
-  transcript_count: number;
 }
 
 export function ChatPanel({
