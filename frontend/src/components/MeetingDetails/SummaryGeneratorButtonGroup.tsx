@@ -21,6 +21,7 @@ import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import { TemplateLanguageSelector } from './TemplateLanguageSelector';
 
 interface SummaryGeneratorButtonGroupProps {
   modelConfig: ModelConfig;
@@ -53,6 +54,8 @@ export function SummaryGeneratorButtonGroup({
 }: SummaryGeneratorButtonGroupProps) {
   const [isCheckingModels, setIsCheckingModels] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [templateLanguageDialogOpen, setTemplateLanguageDialogOpen] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
 
   if (!hasTranscripts) {
     return null;
@@ -175,36 +178,35 @@ export function SummaryGeneratorButtonGroup({
         </DialogContent>
       </Dialog>
 
-      {/* Template selector dropdown */}
+      {/* Template selector button */}
       {availableTemplates.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              title="Select summary template"
-            >
-              <FileText />
-              <span className="hidden lg:inline">Template</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {availableTemplates.map((template) => (
-              <DropdownMenuItem
-                key={template.id}
-                onClick={() => onTemplateSelect(template.id, template.name)}
-                title={template.description}
-                className="flex items-center justify-between gap-2"
-              >
-                <span>{template.name}</span>
-                {selectedTemplate === template.id && (
-                  <Check className="h-4 w-4 text-green-600" />
-                )}
-              </DropdownMenuItem>
-            ))}
-
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            title="Select summary template and language"
+            onClick={() => setTemplateLanguageDialogOpen(true)}
+          >
+            <FileText />
+            <span className="hidden lg:inline">Template</span>
+          </Button>
+          <TemplateLanguageSelector
+            open={templateLanguageDialogOpen}
+            onOpenChange={setTemplateLanguageDialogOpen}
+            templates={availableTemplates}
+            selectedTemplate={selectedTemplate}
+            onTemplateSelect={(templateId, templateName) => {
+              onTemplateSelect(templateId, templateName);
+            }}
+            selectedLanguage={selectedLanguage}
+            onLanguageSelect={(languageCode) => {
+              setSelectedLanguage(languageCode);
+              toast.success('Language selected', {
+                description: `Output language set to ${languageCode}`,
+              });
+            }}
+          />
+        </>
       )}
     </ButtonGroup>
   );
