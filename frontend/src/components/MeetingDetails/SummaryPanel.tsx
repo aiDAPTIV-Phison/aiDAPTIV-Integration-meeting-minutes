@@ -47,7 +47,9 @@ interface SummaryPanelProps {
   getSummaryStatusMessage: (status: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error') => string;
   availableTemplates: Array<{id: string, name: string, description: string}>;
   selectedTemplate: string;
+  selectedLanguage: string;
   onTemplateSelect: (templateId: string, templateName: string) => void;
+  onLanguageSelect: (languageCode: string) => void;
   isModelConfigLoading?: boolean;
 }
 
@@ -81,7 +83,9 @@ export function SummaryPanel({
   getSummaryStatusMessage,
   availableTemplates,
   selectedTemplate,
+  selectedLanguage,
   onTemplateSelect,
+  onLanguageSelect,
   isModelConfigLoading = false
 }: SummaryPanelProps) {
   const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
@@ -146,7 +150,9 @@ export function SummaryPanel({
                 summaryStatus={summaryStatus}
                 availableTemplates={availableTemplates}
                 selectedTemplate={selectedTemplate}
+                selectedLanguage={selectedLanguage}
                 onTemplateSelect={onTemplateSelect}
+                onLanguageSelect={onLanguageSelect}
                 hasTranscripts={transcripts.length > 0}
                 isModelConfigLoading={isModelConfigLoading}
                 onChatClick={() => setShowChat(true)}
@@ -185,7 +191,9 @@ export function SummaryPanel({
               summaryStatus={summaryStatus}
               availableTemplates={availableTemplates}
               selectedTemplate={selectedTemplate}
+              selectedLanguage={selectedLanguage}
               onTemplateSelect={onTemplateSelect}
+              onLanguageSelect={onLanguageSelect}
               hasTranscripts={transcripts.length > 0}
               isModelConfigLoading={isModelConfigLoading}
               onChatClick={() => setShowChat(true)}
@@ -212,7 +220,9 @@ export function SummaryPanel({
               summaryStatus={summaryStatus}
               availableTemplates={availableTemplates}
               selectedTemplate={selectedTemplate}
+              selectedLanguage={selectedLanguage}
               onTemplateSelect={onTemplateSelect}
+              onLanguageSelect={onLanguageSelect}
               hasTranscripts={transcripts.length > 0}
               isModelConfigLoading={isModelConfigLoading}
               onChatClick={() => setShowChat(true)}

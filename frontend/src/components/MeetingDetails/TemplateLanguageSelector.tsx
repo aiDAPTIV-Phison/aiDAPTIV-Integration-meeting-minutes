@@ -34,6 +34,9 @@ interface TemplateLanguageSelectorProps {
 const DEFAULT_LANGUAGES: Language[] = [
   { code: 'en', name: 'English' },
   { code: 'zh-tw', name: '繁體中文' },
+  { code: 'zh-cn', name: '简体中文' },
+  { code: 'ja', name: '日本語' },
+  { code: 'ko', name: '한국어' },
 ];
 
 export function TemplateLanguageSelector({

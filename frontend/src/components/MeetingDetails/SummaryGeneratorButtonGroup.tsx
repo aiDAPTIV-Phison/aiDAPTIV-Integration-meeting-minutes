@@ -32,7 +32,9 @@ interface SummaryGeneratorButtonGroupProps {
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
   availableTemplates: Array<{id: string, name: string, description: string}>;
   selectedTemplate: string;
+  selectedLanguage: string;
   onTemplateSelect: (templateId: string, templateName: string) => void;
+  onLanguageSelect: (languageCode: string) => void;
   hasTranscripts?: boolean;
   isModelConfigLoading?: boolean;
   onChatClick?: () => void;
@@ -47,7 +49,9 @@ export function SummaryGeneratorButtonGroup({
   summaryStatus,
   availableTemplates,
   selectedTemplate,
+  selectedLanguage,
   onTemplateSelect,
+  onLanguageSelect,
   hasTranscripts = true,
   isModelConfigLoading = false,
   onChatClick
@@ -55,7 +59,6 @@ export function SummaryGeneratorButtonGroup({
   const [isCheckingModels, setIsCheckingModels] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [templateLanguageDialogOpen, setTemplateLanguageDialogOpen] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('en');
 
   if (!hasTranscripts) {
     return null;
@@ -200,10 +203,7 @@ export function SummaryGeneratorButtonGroup({
             }}
             selectedLanguage={selectedLanguage}
             onLanguageSelect={(languageCode) => {
-              setSelectedLanguage(languageCode);
-              toast.success('Language selected', {
-                description: `Output language set to ${languageCode}`,
-              });
+              onLanguageSelect(languageCode);
             }}
           />
         </>
