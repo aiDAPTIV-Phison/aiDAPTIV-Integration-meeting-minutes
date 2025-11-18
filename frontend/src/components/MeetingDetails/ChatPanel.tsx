@@ -1,14 +1,25 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { MessageSquare, Send, FileText, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModelConfig } from '@/components/ModelSettingsModal';
-import { Summary } from '@/types';
+import { Summary, Transcript } from '@/types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { BlockNoteSummaryView } from '@/components/AISummary/BlockNoteSummaryView';
+import { SummaryGeneratorButtonGroup } from './SummaryGeneratorButtonGroup';
+import { SummaryUpdaterButtonGroup } from './SummaryUpdaterButtonGroup';
+import Analytics from '@/lib/analytics';
 
 interface ChatPanelProps {
   meeting: {
@@ -22,6 +33,35 @@ interface ChatPanelProps {
   isModelConfigLoading?: boolean;
   aiSummary: Summary | null;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
+  // Props needed for the full summary view dialog
+  summaryPanelProps?: {
+    meetingTitle: string;
+    onTitleChange: (title: string) => void;
+    isEditingTitle: boolean;
+    onStartEditTitle: () => void;
+    onFinishEditTitle: () => void;
+    isTitleDirty: boolean;
+    summaryRef: any;
+    isSaving: boolean;
+    onSaveAll: () => Promise<void>;
+    onCopySummary: () => Promise<void>;
+    onOpenFolder: () => Promise<void>;
+    transcripts: Transcript[];
+    onGenerateSummary: (customPrompt: string) => Promise<void>;
+    customPrompt: string;
+    summaryResponse: any;
+    onSaveSummary: (summary: Summary | { markdown?: string; summary_json?: any[] }) => Promise<void>;
+    onSummaryChange: (summary: Summary) => void;
+    onDirtyChange: (isDirty: boolean) => void;
+    summaryError: string | null;
+    onRegenerateSummary: () => Promise<void>;
+    getSummaryStatusMessage: (status: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error') => string;
+    availableTemplates: Array<{id: string, name: string, description: string}>;
+    selectedTemplate: string;
+    selectedLanguage: string;
+    onTemplateSelect: (templateId: string, templateName: string) => void;
+    onLanguageSelect: (languageCode: string) => void;
+  };
 }
 
 interface Message {
@@ -46,13 +86,15 @@ export function ChatPanel({
   onSaveModelConfig,
   isModelConfigLoading = false,
   aiSummary,
-  summaryStatus
+  summaryStatus,
+  summaryPanelProps
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [context, setContext] = useState<MeetingContext | null>(null);
   const [isNoteExpanded, setIsNoteExpanded] = useState(true);
+  const [isFullSummaryOpen, setIsFullSummaryOpen] = useState(false);
   const streamingContentRef = useRef('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -262,19 +304,131 @@ Please answer the user's questions based on this meeting transcript.`
   };
 
   return (
-    <div className="flex flex-col bg-white min-w-0 h-full">
-      {/* Header */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Chat with AI</h2>
-          </div>
-          <div className="text-sm text-gray-500">
-            {modelConfig.provider} • {modelConfig.model}
+    <>
+      {/* Full Summary View Dialog */}
+      {summaryPanelProps && (
+        <Dialog open={isFullSummaryOpen} onOpenChange={setIsFullSummaryOpen}>
+          <DialogContent className="max-w-[95vw] w-[95vw] h-[95vh] p-0 overflow-hidden flex flex-col">
+            <DialogHeader className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <DialogTitle>Meeting Summary - Full View</DialogTitle>
+              <DialogDescription>
+                Complete summary view with all editing capabilities
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* Embed the complete Summary Panel content */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Title area and button groups */}
+              <div className="flex-shrink-0 p-4 border-b border-gray-200">
+                {/* Button groups - only show when summary exists */}
+                {aiSummary && !(summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating') && (
+                  <div className="flex items-center justify-center w-full gap-2">
+                    {/* Left-aligned: Summary Generator Button Group */}
+                    <div className="flex-shrink-0">
+                      <SummaryGeneratorButtonGroup
+                        modelConfig={modelConfig}
+                        setModelConfig={setModelConfig}
+                        onSaveModelConfig={onSaveModelConfig}
+                        onGenerateSummary={summaryPanelProps.onGenerateSummary}
+                        customPrompt={summaryPanelProps.customPrompt}
+                        summaryStatus={summaryStatus}
+                        availableTemplates={summaryPanelProps.availableTemplates}
+                        selectedTemplate={summaryPanelProps.selectedTemplate}
+                        selectedLanguage={summaryPanelProps.selectedLanguage}
+                        onTemplateSelect={summaryPanelProps.onTemplateSelect}
+                        onLanguageSelect={summaryPanelProps.onLanguageSelect}
+                        hasTranscripts={summaryPanelProps.transcripts.length > 0}
+                        isModelConfigLoading={isModelConfigLoading}
+                        onChatClick={() => {
+                            setIsFullSummaryOpen(false);
+                          }}
+                        />
+                    </div>
+
+                    {/* Right-aligned: Summary Updater Button Group */}
+                    <div className="flex-shrink-0">
+                      <SummaryUpdaterButtonGroup
+                        isSaving={summaryPanelProps.isSaving}
+                        isDirty={summaryPanelProps.isTitleDirty || (summaryPanelProps.summaryRef.current?.isDirty || false)}
+                        onSave={summaryPanelProps.onSaveAll}
+                        onCopy={summaryPanelProps.onCopySummary}
+                        onFind={() => {
+                          console.log('Find in summary clicked');
+                        }}
+                        onOpenFolder={summaryPanelProps.onOpenFolder}
+                        hasSummary={!!aiSummary}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Loading state */}
+              {(summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating') ? (
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center justify-center flex-1">
+                    <div className="text-center">
+                      <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+                      <p className="text-gray-600">Generating AI Summary...</p>
+                    </div>
+                  </div>
+                </div>
+              ) : aiSummary && summaryPanelProps.transcripts?.length > 0 ? (
+                /* Summary editor area */
+                <div className="flex-1 overflow-y-auto min-h-0">
+                  <div className="p-6 w-full">
+                    <BlockNoteSummaryView
+                      ref={summaryPanelProps.summaryRef}
+                      summaryData={aiSummary}
+                      onSave={summaryPanelProps.onSaveSummary}
+                      onSummaryChange={summaryPanelProps.onSummaryChange}
+                      onDirtyChange={summaryPanelProps.onDirtyChange}
+                      status={summaryStatus}
+                      error={summaryPanelProps.summaryError}
+                      onRegenerateSummary={() => {
+                        Analytics.trackButtonClick('regenerate_summary', 'meeting_details');
+                        summaryPanelProps.onRegenerateSummary();
+                      }}
+                      meeting={{
+                        id: meeting.id,
+                        title: summaryPanelProps.meetingTitle,
+                        created_at: meeting.created_at
+                      }}
+                    />
+                  </div>
+                  {summaryStatus !== 'idle' && (
+                    <div className={`mt-4 mx-6 p-4 rounded-lg ${summaryStatus === 'error' ? 'bg-red-100 text-red-700' :
+                      summaryStatus === 'completed' ? 'bg-green-100 text-green-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                      <p className="text-sm font-medium">{summaryPanelProps.getSummaryStatusMessage(summaryStatus)}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center flex-1">
+                  <p className="text-gray-500">No summary available</p>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Main Chat Panel UI */}
+      <div className="flex flex-col bg-white min-w-0 h-full">
+        {/* Header */}
+        <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Chat with AI</h2>
+            </div>
+            <div className="text-sm text-gray-500">
+              {modelConfig.provider} • {modelConfig.model}
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Note Preview Section - Collapsible */}
       <div
@@ -294,24 +448,48 @@ Please answer the user's questions based on this meeting transcript.`
                 : ''}
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsNoteExpanded(!isNoteExpanded)}
-            className="h-7 px-2"
-            title={isNoteExpanded ? 'Collapse note preview' : 'Expand note preview'}
-          >
-            {isNoteExpanded ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
+          <div className="flex items-center gap-1">
+            {/* Expand to full view button */}
+            {aiSummary && summaryPanelProps && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsFullSummaryOpen(true)}
+                className="h-7 px-2"
+                title="Open full summary view"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
             )}
-          </Button>
+            {/* Collapse/expand preview button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsNoteExpanded(!isNoteExpanded)}
+              className="h-7 px-2"
+              title={isNoteExpanded ? 'Collapse note preview' : 'Expand note preview'}
+            >
+              {isNoteExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
 
-        {/* Content - collapsible */}
+        {/* Content - collapsible and clickable */}
         {isNoteExpanded && (
-          <div className="h-full overflow-y-auto p-4" style={{ height: 'calc(100% - 44px)' }}>
+          <div
+            className={`h-full overflow-y-auto p-4 ${aiSummary && summaryPanelProps ? 'cursor-pointer hover:bg-gray-100 transition-colors' : ''}`}
+            style={{ height: 'calc(100% - 44px)' }}
+            onClick={() => {
+              if (aiSummary && summaryPanelProps) {
+                setIsFullSummaryOpen(true);
+              }
+            }}
+            title={aiSummary && summaryPanelProps ? 'Click to open full summary view' : ''}
+          >
             {/* Summary content */}
             {!aiSummary ? (
               <div className="text-sm text-gray-600">
@@ -452,7 +630,8 @@ Please answer the user's questions based on this meeting transcript.`
         </p>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

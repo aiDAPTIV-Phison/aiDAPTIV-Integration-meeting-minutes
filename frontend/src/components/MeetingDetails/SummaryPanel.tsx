@@ -118,6 +118,34 @@ export function SummaryPanel({
             isModelConfigLoading={isModelConfigLoading}
             aiSummary={aiSummary}
             summaryStatus={summaryStatus}
+            summaryPanelProps={{
+              meetingTitle,
+              onTitleChange,
+              isEditingTitle,
+              onStartEditTitle,
+              onFinishEditTitle,
+              isTitleDirty,
+              summaryRef,
+              isSaving,
+              onSaveAll,
+              onCopySummary,
+              onOpenFolder,
+              transcripts,
+              onGenerateSummary,
+              customPrompt,
+              summaryResponse,
+              onSaveSummary,
+              onSummaryChange,
+              onDirtyChange,
+              summaryError,
+              onRegenerateSummary,
+              getSummaryStatusMessage,
+              availableTemplates,
+              selectedTemplate,
+              selectedLanguage,
+              onTemplateSelect,
+              onLanguageSelect,
+            }}
           />
         </div>
       </div>
