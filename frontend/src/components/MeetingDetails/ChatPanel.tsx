@@ -339,9 +339,9 @@ Please answer the user's questions based on this meeting transcript.`
                         onLanguageSelect={summaryPanelProps.onLanguageSelect}
                         hasTranscripts={summaryPanelProps.transcripts.length > 0}
                         isModelConfigLoading={isModelConfigLoading}
-                        onChatClick={() => {
-                            setIsFullSummaryOpen(false);
-                          }}
+                        // onChatClick={() => {
+                        //     setIsFullSummaryOpen(false);
+                        //   }}
                         />
                     </div>
 
