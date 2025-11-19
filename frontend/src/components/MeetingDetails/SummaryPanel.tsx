@@ -53,6 +53,24 @@ interface SummaryPanelProps {
   isModelConfigLoading?: boolean;
 }
 
+// Helper function to format time (microseconds to human-readable)
+const formatTime = (time_us: number): string => {
+  const time_ms = time_us / 1000;
+
+  if (time_ms < 1000) {
+    return `${time_ms.toFixed(2)}ms`;
+  } else if (time_ms < 60000) {
+    const seconds = (time_ms / 1000).toFixed(2);
+    return `${seconds}s`;
+  } else {
+    const minutes = Math.floor(time_ms / 60000);
+    const remainingMs = time_ms % 60000;
+    const seconds = Math.floor(remainingMs / 1000);
+    const ms = (remainingMs % 1000).toFixed(0);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}.${ms}`;
+  }
+};
+
 export function SummaryPanel({
   meeting,
   meetingTitle,
@@ -155,7 +173,7 @@ export function SummaryPanel({
   return (
     <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden">
       {/* Title area */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="relative p-4 border-b border-gray-200">
         {/* <EditableTitle
           title={meetingTitle}
           isEditing={isEditingTitle}
@@ -310,6 +328,25 @@ export function SummaryPanel({
               ) : null}
             </div>
           )}
+          {/* Timing Metrics Display - positioned above Summary content block */}
+          {aiSummary && !isSummaryLoading && (() => {
+            const ttft = (aiSummary as any)?.ttft_us;
+            const totalTime = (aiSummary as any)?.total_time_us;
+            // Always show timing metrics if summary exists (even if ttft is None)
+            if (totalTime !== undefined) {
+              return (
+                <div className="px-6 pt-6 pb-2 flex items-center justify-end gap-3">
+                  <span className="text-[10px] text-gray-500 opacity-70">
+                    ttft: {ttft !== undefined && ttft !== null ? formatTime(ttft) : 'N/A'}
+                  </span>
+                  <span className="text-[10px] text-gray-500 opacity-70">
+                    total: {formatTime(totalTime)}
+                  </span>
+                </div>
+              );
+            }
+            return null;
+          })()}
           <div className="p-6 w-full">
             <BlockNoteSummaryView
               ref={summaryRef}

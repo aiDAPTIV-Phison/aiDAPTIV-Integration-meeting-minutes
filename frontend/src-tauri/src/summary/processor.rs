@@ -131,7 +131,7 @@ pub fn extract_meeting_name_from_markdown(markdown: &str) -> Option<String> {
 /// * `ollama_endpoint` - Optional custom Ollama endpoint
 ///
 /// # Returns
-/// Tuple of (final_summary_markdown, number_of_chunks_processed)
+/// Tuple of (final_summary_markdown, number_of_chunks_processed, ttft_us, total_time_us)
 pub async fn generate_meeting_summary(
     client: &Client,
     provider: &LLMProvider,
@@ -144,7 +144,7 @@ pub async fn generate_meeting_summary(
     token_threshold: usize,
     ollama_endpoint: Option<&str>,
     openai_compatible_endpoint: Option<&str>,
-) -> Result<(String, i64), String> {
+) -> Result<(String, i64, Option<u64>, u64), String> {
     info!(
         "Starting summary generation with provider: {:?}, model: {}",
         provider, model_name
@@ -193,6 +193,7 @@ pub async fn generate_meeting_summary(
                 &user_prompt_chunk,
                 ollama_endpoint,
                 openai_compatible_endpoint,
+                false, // Chunk summaries don't need TTFT tracking
             )
             .await
             {
@@ -225,12 +226,17 @@ pub async fn generate_meeting_summary(
                 "Combining {} chunk summaries into cohesive summary",
                 chunk_summaries.len()
             );
-            let combined_text = chunk_summaries.join("\n---\n");
+            // Extract content from SummaryResult objects and join them
+            let combined_text = chunk_summaries
+                .iter()
+                .map(|r| r.content.as_str())
+                .collect::<Vec<&str>>()
+                .join("\n---\n");
             let system_prompt_combine = "You are an expert at synthesizing meeting summaries.";
             let user_prompt_combine_template = "The following are consecutive summaries of a meeting. Combine them into a single, coherent, and detailed narrative summary that retains all important details, organized logically.\n\n<summaries>\n{}\n</summaries>";
 
             let user_prompt_combine = user_prompt_combine_template.replace("{}", &combined_text);
-            generate_summary(
+            let result = generate_summary(
                 client,
                 provider,
                 model_name,
@@ -239,10 +245,12 @@ pub async fn generate_meeting_summary(
                 &user_prompt_combine,
                 ollama_endpoint,
                 openai_compatible_endpoint,
+                false, // Combining chunks doesn't need TTFT tracking
             )
-            .await?
+            .await?;
+            result.content
         } else {
-            chunk_summaries.remove(0)
+            chunk_summaries.remove(0).content
         };
     }
 
@@ -306,7 +314,7 @@ pub async fn generate_meeting_summary(
         final_user_prompt.push_str("\n</user_context>");
     }
 
-    let raw_markdown = generate_summary(
+    let result = generate_summary(
         client,
         provider,
         model_name,
@@ -315,12 +323,13 @@ pub async fn generate_meeting_summary(
         &final_user_prompt,
         ollama_endpoint,
         openai_compatible_endpoint,
+        true, // Final summary generation: enable streaming for TTFT tracking
     )
     .await?;
 
     // Clean the output
-    let final_markdown = clean_llm_markdown_output(&raw_markdown);
+    let final_markdown = clean_llm_markdown_output(&result.content);
 
     info!("Summary generation completed successfully");
-    Ok((final_markdown, successful_chunk_count))
+    Ok((final_markdown, successful_chunk_count, result.ttft_us, result.total_time_us))
 }

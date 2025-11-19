@@ -35,6 +35,7 @@ pub use llm_client::{
     StreamDonePayload,
     StreamErrorPayload,
     StreamUsage,
+    SummaryResult,
 };
 pub use processor::{
     chunk_text, clean_llm_markdown_output, extract_meeting_name_from_markdown,

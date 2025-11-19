@@ -386,7 +386,7 @@ Please answer the user's questions based on this meeting transcript.`
             {/* Embed the complete Summary Panel content */}
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Title area and button groups */}
-              <div className="flex-shrink-0 p-4 border-b border-gray-200">
+              <div className="relative flex-shrink-0 p-4 border-b border-gray-200">
                 {/* Button groups - only show when summary exists */}
                 {aiSummary && !(summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating') && (
                   <div className="flex items-center justify-center w-full gap-2">
@@ -428,6 +428,26 @@ Please answer the user's questions based on this meeting transcript.`
                     </div>
                   </div>
                 )}
+
+                {/* Timing Metrics Display - positioned in top-right of modal */}
+                {aiSummary && !(summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating') && (() => {
+                  const ttft = (aiSummary as any)?.ttft_us;
+                  const totalTime = (aiSummary as any)?.total_time_us;
+                  // Always show timing metrics if summary exists (even if ttft is None)
+                  if (totalTime !== undefined) {
+                    return (
+                      <div className="absolute top-2 right-6 flex items-center gap-3">
+                        <span className="text-[10px] text-gray-500 opacity-70">
+                          ttft: {ttft !== undefined && ttft !== null ? formatTTFT(ttft) : 'N/A'}
+                        </span>
+                        <span className="text-[10px] text-gray-500 opacity-70">
+                          total: {formatTTFT(totalTime)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               {/* Loading state */}
@@ -514,6 +534,26 @@ Please answer the user's questions based on this meeting transcript.`
                 ? '✓ Synced'
                 : ''}
             </span>
+            {/* Timing Metrics */}
+            {aiSummary && (() => {
+              const ttft = (aiSummary as any)?.ttft_us;
+              const totalTime = (aiSummary as any)?.total_time_us;
+              // Always show timing metrics if summary exists (even if ttft is None)
+              if (totalTime !== undefined) {
+                return (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">•</span>
+                    <span className="text-[10px] text-gray-500 opacity-70">
+                      ttft: {ttft !== undefined && ttft !== null ? formatTTFT(ttft) : 'N/A'}
+                    </span>
+                    <span className="text-[10px] text-gray-500 opacity-70">
+                      total: {formatTTFT(totalTime)}
+                    </span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
           <div className="flex items-center gap-1">
             {/* Expand to full view button */}
