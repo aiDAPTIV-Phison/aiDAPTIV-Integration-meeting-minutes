@@ -176,19 +176,20 @@ pub async fn generate_meeting_summary(
         info!("Split transcript into {} chunks", num_chunks);
 
         let mut chunk_summaries = Vec::new();
-        let system_prompt_chunk = "You are an expert meeting summarizer.";
-        let user_prompt_template_chunk = "Provide a concise but comprehensive summary of the following transcript chunk. Capture all key points, decisions, action items, and mentioned individuals.\n\n<transcript_chunk>\n{}\n</transcript_chunk>";
+        let system_prompt_template_chunk = "<transcript_chunk>\n{}\n</transcript_chunk>\n\nYou are an expert meeting summarizer.";
+        let user_prompt_template_chunk = "Provide a concise but comprehensive summary of the above transcript chunk. Capture all key points, decisions, action items, and mentioned individuals.";
 
         for (i, chunk) in chunks.iter().enumerate() {
             info!("⏲️ Processing chunk {}/{}", i + 1, num_chunks);
-            let user_prompt_chunk = user_prompt_template_chunk.replace("{}", chunk.as_str());
+            let system_prompt_chunk = system_prompt_template_chunk.replace("{}", chunk.as_str());
+            let user_prompt_chunk = user_prompt_template_chunk;
 
             match generate_summary(
                 client,
                 provider,
                 model_name,
                 api_key,
-                system_prompt_chunk,
+                &system_prompt_chunk,
                 &user_prompt_chunk,
                 ollama_endpoint,
                 openai_compatible_endpoint,
@@ -225,16 +226,17 @@ pub async fn generate_meeting_summary(
                 chunk_summaries.len()
             );
             let combined_text = chunk_summaries.join("\n---\n");
-            let system_prompt_combine = "You are an expert at synthesizing meeting summaries.";
-            let user_prompt_combine_template = "The following are consecutive summaries of a meeting. Combine them into a single, coherent, and detailed narrative summary that retains all important details, organized logically.\n\n<summaries>\n{}\n</summaries>";
+            let system_prompt_combine_template = "<summaries>\n{}\n</summaries>\n\nYou are an expert at synthesizing meeting summaries.";
+            let user_prompt_combine_template = "The following are consecutive summaries of a meeting. Combine them into a single, coherent, and detailed narrative summary that retains all important details, organized logically.";
 
-            let user_prompt_combine = user_prompt_combine_template.replace("{}", &combined_text);
+            let system_prompt_combine = system_prompt_combine_template.replace("{}", &combined_text);
+            let user_prompt_combine = user_prompt_combine_template;
             generate_summary(
                 client,
                 provider,
                 model_name,
                 api_key,
-                system_prompt_combine,
+                &system_prompt_combine,
                 &user_prompt_combine,
                 ollama_endpoint,
                 openai_compatible_endpoint,
@@ -256,7 +258,11 @@ pub async fn generate_meeting_summary(
     let section_instructions = template.to_section_instructions();
 
     let final_system_prompt = format!(
-        r#"You are an expert meeting summarizer. Generate a final meeting report by filling in the provided Markdown template based on the source text.
+        r#"<transcript_chunks>
+{}
+</transcript_chunks>
+
+You are an expert meeting summarizer. Generate a final meeting report by filling in the provided Markdown template based on the source text.
 
 **CRITICAL INSTRUCTIONS:**
 1. Only use information present in the source text; do not add or infer anything.
@@ -273,17 +279,10 @@ pub async fn generate_meeting_summary(
 {}
 </template>
 "#,
-        section_instructions, clean_template_markdown
+        content_to_summarize, section_instructions, clean_template_markdown
     );
 
-    let mut final_user_prompt = format!(
-        r#"
-<transcript_chunks>
-{}
-</transcript_chunks>
-"#,
-        content_to_summarize
-    );
+    let mut final_user_prompt = "Please process the request.".to_string();
 
     if !custom_prompt.is_empty() {
         final_user_prompt.push_str("\n\nUser Provided Context:\n\n<user_context>\n");
