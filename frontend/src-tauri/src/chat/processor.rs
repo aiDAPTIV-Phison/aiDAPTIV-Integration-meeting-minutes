@@ -106,23 +106,27 @@ pub async fn build_chat_system_prompt(
 ) -> String {
     info!("Building chat system prompt for meeting: {}", meeting.id);
 
-    // Get the first chunk using the same logic as summary/processor
-    let transcript_chunk = get_transcript_chunk_for_chat(
-        transcript_text,
-        provider,
-        model_name,
-        ollama_endpoint,
-        openai_compatible_endpoint,
-    )
-    .await;
+    // Calculate token threshold (same logic as summary/processor)
+    let token_threshold = if provider == &LLMProvider::Ollama {
+        match METADATA_CACHE.get_or_fetch(model_name, ollama_endpoint).await {
+            Ok(metadata) => metadata.context_size.saturating_sub(300),
+            Err(_) => 4000,
+        }
+    } else {
+        100000
+    };
+
+    let total_tokens = rough_token_count(transcript_text);
 
     // Format the meeting date
     let formatted_date = &meeting.created_at;
 
-    // Use the same layout as summary/processor with <transcript_chunks> tag
-    // This ensures KV cache hit when the same chunk is used in summary generation
-    let system_prompt = format!(
-        r#"<transcript_chunks>
+    // Use different prompt format based on token threshold to match summary/processor's KV cache
+    let system_prompt = if provider != &LLMProvider::Ollama || total_tokens < token_threshold {
+        // Token < threshold: Match summary's final prompt format (uses full transcript with <transcript_chunks>)
+        info!("Chat using full transcript (tokens: {} < threshold: {}) - matching summary's final prompt", total_tokens, token_threshold);
+        format!(
+            r#"<transcript_chunks>
 {}
 </transcript_chunks>
 
@@ -131,14 +135,37 @@ You are a helpful AI assistant analyzing a meeting transcript. Here is the meeti
 Title: {}
 Date: {}
 
+Please answer the user's questions based on the transcript above. Be concise and accurate in your responses."#,
+            transcript_text, meeting.title, formatted_date
+        )
+    } else {
+        // Token >= threshold: Match summary's chunk prompt format (uses first chunk with <transcript_chunk>)
+        info!("Chat using first chunk (tokens: {} >= threshold: {}) - matching summary's chunk prompt", total_tokens, token_threshold);
+        let chunks = chunk_text(transcript_text, token_threshold - 300, 100);
+        let first_chunk = if chunks.is_empty() {
+            transcript_text.to_string()
+        } else {
+            chunks[0].clone()
+        };
+
+        format!(
+            r#"<transcript_chunk>
+{}
+</transcript_chunk>
+
+You are a helpful AI assistant analyzing a meeting transcript. Here is the meeting information:
+
+Title: {}
+Date: {}
+
 Please answer the user's questions based on the transcript chunk above. Be concise and accurate in your responses."#,
-        transcript_chunk, meeting.title, formatted_date
-    );
+            first_chunk, meeting.title, formatted_date
+        )
+    };
 
     info!(
-        "System prompt built successfully (length: {} chars, transcript chunk: {} chars)",
-        system_prompt.len(),
-        transcript_chunk.len()
+        "System prompt built successfully (length: {} chars)",
+        system_prompt.len()
     );
 
     system_prompt
