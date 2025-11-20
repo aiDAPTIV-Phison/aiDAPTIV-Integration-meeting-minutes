@@ -118,6 +118,7 @@ pub async fn chat_send_message<R: Runtime>(
 
     // Build complete message history with system prompt
     // Chunking logic is handled inside processor::build_chat_messages
+    // This may return an error if transcript exceeds single-chunk limit
     let messages = processor::build_chat_messages(
         &meeting,
         &transcript_text,
@@ -128,7 +129,7 @@ pub async fn chat_send_message<R: Runtime>(
         request.user_messages.clone(),
         &request.current_message,
     )
-    .await;
+    .await?;
 
     // Validate messages
     processor::validate_chat_messages(&messages)?;

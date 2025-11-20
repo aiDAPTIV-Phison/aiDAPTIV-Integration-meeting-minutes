@@ -28,7 +28,7 @@ pub async fn get_transcript_chunk_for_chat(
     provider: &LLMProvider,
     model_name: &str,
     ollama_endpoint: Option<&str>,
-    _openai_compatible_endpoint: Option<&str>,
+    openai_compatible_endpoint: Option<&str>,
 ) -> String {
     // Calculate token threshold - same logic as summary/processor
     // Only Ollama uses endpoint for metadata lookup, but we accept openai_compatible_endpoint
@@ -110,15 +110,15 @@ Please answer the user's questions based on the {} above. Be concise and accurat
 /// * `openai_compatible_endpoint` - Optional OpenAI-compatible endpoint
 ///
 /// # Returns
-/// Formatted system prompt string
+/// Ok(String) with formatted system prompt, or Err(String) if transcript exceeds single-chunk limit
 pub async fn build_chat_system_prompt(
     meeting: &MeetingDetails,
     transcript_text: &str,
     provider: &LLMProvider,
     model_name: &str,
     ollama_endpoint: Option<&str>,
-    _openai_compatible_endpoint: Option<&str>,
-) -> String {
+    openai_compatible_endpoint: Option<&str>,
+) -> Result<String, String> {
     info!("Building chat system prompt for meeting: {}", meeting.id);
 
     // Calculate token threshold (same logic as summary/processor)
@@ -152,6 +152,16 @@ pub async fn build_chat_system_prompt(
         // Token >= threshold: Match summary's chunk prompt format (uses first chunk with <transcript_chunk>)
         info!("Chat using first chunk (tokens: {} >= threshold: {}) - matching summary's chunk prompt", total_tokens, token_threshold);
         let chunks = chunk_text(transcript_text, token_threshold - 300, 100);
+
+        // Safety check: If chunking results in multiple chunks, chat cannot handle it
+        if chunks.len() > 1 {
+            warn!(
+                "Transcript exceeds single-chunk limit: {} tokens split into {} chunks (threshold: {})",
+                total_tokens, chunks.len(), token_threshold
+            );
+            return Err("Current version cannot handle transcripts that exceed the token threshold and require multiple chunks. Chat model cannot complete the request.".to_string());
+        }
+
         let first_chunk = if chunks.is_empty() {
             transcript_text.to_string()
         } else {
@@ -172,7 +182,7 @@ pub async fn build_chat_system_prompt(
         system_prompt.len()
     );
 
-    system_prompt
+    Ok(system_prompt)
 }
 
 /// Builds complete message history for chat request
@@ -189,7 +199,7 @@ pub async fn build_chat_system_prompt(
 /// * `current_message` - Current user message
 ///
 /// # Returns
-/// Complete message array with system prompt + history + current message
+/// Ok(Vec<ChatMessage>) with complete message array, or Err(String) if transcript exceeds limit
 pub async fn build_chat_messages(
     meeting: &MeetingDetails,
     transcript_text: &str,
@@ -199,10 +209,11 @@ pub async fn build_chat_messages(
     openai_compatible_endpoint: Option<&str>,
     user_messages: Vec<ChatMessage>,
     current_message: &str,
-) -> Vec<ChatMessage> {
+) -> Result<Vec<ChatMessage>, String> {
     let mut messages = Vec::new();
 
     // Add system prompt (automatically handles chunking)
+    // This may return an error if transcript exceeds single-chunk limit
     messages.push(ChatMessage {
         role: "system".to_string(),
         content: build_chat_system_prompt(
@@ -213,7 +224,7 @@ pub async fn build_chat_messages(
             ollama_endpoint,
             openai_compatible_endpoint,
         )
-        .await,
+        .await?,
     });
 
     // Add message history
@@ -227,7 +238,7 @@ pub async fn build_chat_messages(
 
     info!("Built {} messages for chat request", messages.len());
 
-    messages
+    Ok(messages)
 }
 
 /// Validates chat message structure
