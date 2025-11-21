@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, FileText, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
+import { MessageSquare, Send, FileText, ChevronDown, ChevronUp, Maximize2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { Summary, Transcript } from '@/types';
@@ -335,6 +335,15 @@ export function ChatPanel({
     }
   };
 
+  const handleClearHistory = () => {
+    if (messages.length === 0) return;
+
+    if (window.confirm('Are you sure you want to clear all chat history? This action cannot be undone.')) {
+      setMessages([]);
+      toast.success('Chat history cleared');
+    }
+  };
+
   // Format TTFT for display (input is in microseconds)
   const formatTTFT = (ttft_us: number): string => {
     // Convert microseconds to milliseconds with decimal precision
@@ -498,8 +507,20 @@ export function ChatPanel({
               <MessageSquare className="h-5 w-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Chat with AI</h2>
             </div>
-            <div className="text-sm text-gray-500">
-              {modelConfig.provider} • {modelConfig.model}
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-gray-500">
+                {modelConfig.provider} • {modelConfig.model}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearHistory}
+                disabled={messages.length === 0 || isLoading}
+                className="h-8 px-2 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                title="Clear chat history"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
