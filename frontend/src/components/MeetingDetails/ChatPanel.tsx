@@ -167,7 +167,10 @@ export function ChatPanel({
         console.log(`Loaded ${loadedMessages.length} messages from database`);
       } catch (error) {
         console.error('Failed to load chat data:', error);
-        toast.error('Failed to load chat data');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        toast.error('Failed to load chat history', {
+          description: errorMessage
+        });
       }
     };
 
@@ -232,9 +235,13 @@ export function ChatPanel({
                 content: streamingContentRef.current,
                 ttftUs: ttft_us ?? null
               });
+              console.log('Assistant message saved to database');
             } catch (error) {
               console.error('Failed to save assistant message:', error);
-              toast.error('Failed to save assistant message to database');
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              toast.error('Failed to save assistant message', {
+                description: errorMessage
+              });
             }
           }
 
@@ -247,9 +254,20 @@ export function ChatPanel({
         const { request_id, message } = event.payload;
         if (request_id === meeting.id) {
           console.error('Chat streaming error:', message);
-          toast.error(`Chat error: ${message}`);
+          const errorMessage = message || 'Unknown error occurred during chat streaming';
+          toast.error('Chat streaming error', {
+            description: errorMessage
+          });
           setIsLoading(false);
           streamingContentRef.current = '';
+
+          // Remove the placeholder assistant message on error
+          setMessages(prev => {
+            if (prev.length > 0 && prev[prev.length - 1].role === 'assistant' && prev[prev.length - 1].content === '') {
+              return prev.slice(0, -1);
+            }
+            return prev;
+          });
         }
       });
     };
@@ -317,9 +335,13 @@ export function ChatPanel({
         content: userMessage.content,
         ttftUs: null
       });
+      console.log('User message saved to database');
     } catch (error) {
       console.error('Failed to save user message:', error);
-      toast.error('Failed to save user message to database');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to save user message', {
+        description: errorMessage
+      });
     }
 
     // Re-enable auto-scroll when sending a new message
@@ -376,7 +398,10 @@ export function ChatPanel({
 
     } catch (error) {
       console.error('Failed to send chat message:', error);
-      toast.error('Failed to send message');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to send message', {
+        description: errorMessage
+      });
       setIsLoading(false);
 
       // Remove the placeholder assistant message on error
@@ -406,7 +431,10 @@ export function ChatPanel({
         toast.success('Chat history cleared');
       } catch (error) {
         console.error('Failed to clear chat history:', error);
-        toast.error('Failed to clear chat history');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        toast.error('Failed to clear chat history', {
+          description: errorMessage
+        });
       }
     }
   };
