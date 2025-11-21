@@ -14,6 +14,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::task::JoinHandle;
 
 use super::{parse_audio_device, RecordingManager, DeviceEvent, DeviceMonitorType};
+use super::devices::{default_input_device, default_output_device};
 
 // Import transcription modules
 use super::transcription::{
@@ -38,6 +39,24 @@ static TRANSCRIPTION_TASK: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 // ============================================================================
 // PUBLIC TYPES
 // ============================================================================
+
+/// Recording mode determines which audio sources are used
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RecordingMode {
+    /// Only record microphone audio
+    MicrophoneOnly,
+    /// Only record system audio
+    SystemAudioOnly,
+    /// Mix both microphone and system audio
+    Mixed,
+}
+
+impl Default for RecordingMode {
+    fn default() -> Self {
+        RecordingMode::SystemAudioOnly
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct RecordingArgs {
@@ -117,10 +136,12 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     });
 
     // Start recording with default devices
+    info!("🔍 [recording_commands] ⚠️ About to call start_recording_with_defaults() - this will HARDCODE Mixed mode!");
     let transcription_receiver = manager
         .start_recording_with_defaults()
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
+    info!("🔍 [recording_commands] ✅ start_recording_with_defaults() completed (Mixed mode was used)");
 
     // Store the manager globally to keep it alive
     {
@@ -194,7 +215,7 @@ pub async fn start_recording_with_devices<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
 ) -> Result<(), String> {
-    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None).await
+    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None, None).await
 }
 
 /// Start recording with specific devices and optional meeting name
@@ -203,10 +224,12 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
     meeting_name: Option<String>,
+    recording_mode: Option<RecordingMode>,
 ) -> Result<(), String> {
+
     info!(
-        "Starting recording with specific devices: mic={:?}, system={:?}, meeting={:?}",
-        mic_device_name, system_device_name, meeting_name
+        "🔍 [recording_commands] Starting recording with specific devices: mic={:?}, system={:?}, meeting={:?}, mode={:?}",
+        mic_device_name, system_device_name, meeting_name, recording_mode
     );
 
     // Check if already recording
@@ -232,22 +255,65 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     }
     info!("✅ Transcription model validation passed");
 
-    // Parse devices
-    let mic_device = if let Some(ref name) = mic_device_name {
+    // Clone device names for later use in event emission
+    let mic_device_name_for_event = mic_device_name.clone();
+    let system_device_name_for_event = system_device_name.clone();
+
+    // Get recording mode with default value
+    let mode = recording_mode.unwrap_or_default();
+
+    // CRITICAL: Filter devices based on recording mode BEFORE parsing
+    // This ensures unwanted audio sources are never initialized
+    let (final_mic_device_name, final_system_device_name) = match mode {
+        RecordingMode::MicrophoneOnly => {
+            (mic_device_name, None)
+        }
+        RecordingMode::SystemAudioOnly => {
+            (None, system_device_name)
+        }
+        RecordingMode::Mixed => {
+            (mic_device_name, system_device_name)
+        }
+    };
+
+    // if no device specified, use default microphone device
+    let mic_device = if let Some(ref name) = final_mic_device_name {
         Some(Arc::new(parse_audio_device(name).map_err(|e| {
             format!("Invalid microphone device '{}': {}", name, e)
         })?))
+    } else if mode == RecordingMode::MicrophoneOnly || mode == RecordingMode::Mixed {
+        match default_input_device() {
+            Ok(device) => Some(Arc::new(device)),
+            Err(e) => {
+                warn!("⚠️ Failed to get default microphone device: {}", e);
+                None
+            }
+        }
     } else {
         None
     };
 
-    let system_device = if let Some(ref name) = system_device_name {
+    // if no device specified, use default system audio device
+    let system_device = if let Some(ref name) = final_system_device_name {
         Some(Arc::new(parse_audio_device(name).map_err(|e| {
             format!("Invalid system device '{}': {}", name, e)
         })?))
+    } else if mode == RecordingMode::SystemAudioOnly || mode == RecordingMode::Mixed {
+        match default_output_device() {
+            Ok(device) => Some(Arc::new(device)),
+            Err(e) => {
+                warn!("⚠️ Failed to get default system audio device: {}", e);
+                None
+            }
+        }
     } else {
         None
     };
+
+    info!("🔍 [recording_commands] Final devices - mode={:?}, mic={:?}, system={:?}",
+          mode,
+          mic_device.as_ref().map(|d| d.name.as_str()),
+          system_device.as_ref().map(|d| d.name.as_str()));
 
     // Async-first approach for custom devices - no more blocking operations!
     info!("🚀 Starting async recording initialization with custom devices");
@@ -271,11 +337,12 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         let _ = app_for_error.emit("recording-error", error.user_message());
     });
 
-    // Start recording with specified devices
+    // Start recording with specified devices and mode
     let transcription_receiver = manager
-        .start_recording(mic_device, system_device)
+        .start_recording(mic_device, system_device, mode)
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
+    info!("🔍 [recording_commands] ✅ Recording manager started successfully with mode: {:?}", mode);
 
     // Store the manager globally to keep it alive
     {
@@ -332,8 +399,8 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     app.emit("recording-started", serde_json::json!({
         "message": "Recording started with custom devices and parallel processing",
         "devices": [
-            mic_device_name.unwrap_or_else(|| "Default Microphone".to_string()),
-            system_device_name.unwrap_or_else(|| "Default System Audio".to_string())
+            mic_device_name_for_event.unwrap_or_else(|| "Default Microphone".to_string()),
+            system_device_name_for_event.unwrap_or_else(|| "Default System Audio".to_string())
         ],
         "workers": 3
     })).map_err(|e| e.to_string())?;

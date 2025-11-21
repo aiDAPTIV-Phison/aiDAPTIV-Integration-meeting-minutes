@@ -9,6 +9,7 @@ import { listen } from '@tauri-apps/api/event';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import Analytics from '@/lib/analytics';
+import { SelectedDevices, filterDevicesByRecordingMode, DEFAULT_RECORDING_MODE } from '@/components/DeviceSelection';
 
 interface RecordingControlsProps {
   isRecording: boolean;
@@ -20,10 +21,7 @@ interface RecordingControlsProps {
   onStopInitiated?: () => void; // Called immediately when stop button is clicked
   isRecordingDisabled: boolean;
   isParentProcessing: boolean;
-  selectedDevices?: {
-    micDevice: string | null;
-    systemDevice: string | null;
-  };
+  selectedDevices?: SelectedDevices;
   meetingName?: string;
 }
 
@@ -107,16 +105,21 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
 
       // Use the correct command with device parameters
       if (selectedDevices || meetingName || generatedMeetingTitle) {
-        console.log('Using start_recording_with_devices_and_meeting with:', {
-          mic_device_name: selectedDevices?.micDevice || null,
-          system_device_name: selectedDevices?.systemDevice || null,
-          meeting_name: meetingName || generatedMeetingTitle
-        });
-        const result = await invoke('start_recording_with_devices_and_meeting', {
-          mic_device_name: selectedDevices?.micDevice || null,
-          system_device_name: selectedDevices?.systemDevice || null,
-          meeting_name: meetingName || generatedMeetingTitle
-        });
+        // Filter devices based on recording mode using shared utility function
+        const { micDeviceName, systemDeviceName, recordingMode } = filterDevicesByRecordingMode(selectedDevices || {});
+        // Defensive check: Ensure recordingMode always has a value
+        // Tauri will map camelCase keys to snake_case for Rust commands, so use camelCase here
+        const finalRecordingMode = recordingMode || DEFAULT_RECORDING_MODE;
+
+        // Prepare parameters for Tauri invoke, using camelCase keys to allow Rust mapping to snake_case
+        const invokeParams = {
+          micDeviceName,                              // Maps to Rust mic_device_name
+          systemDeviceName,                           // Maps to Rust system_device_name
+          meetingName: meetingName || generatedMeetingTitle, // Maps to Rust meeting_name
+          recordingMode: finalRecordingMode           // Maps to Rust recording_mode
+        };
+        
+        const result = await invoke('start_recording_with_devices_and_meeting', invokeParams);
         console.log('Backend recording start result:', result);
       } else {
         console.log('Using start_recording (no devices/meeting specified)');
@@ -139,13 +142,19 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
       // Parse error message to provide user-friendly feedback
       const errorMsg = error instanceof Error ? error.message : String(error);
 
+      // Get recording mode to determine which errors are relevant
+      const { recordingMode: currentRecordingMode } = filterDevicesByRecordingMode(selectedDevices || {});
+      const finalMode = currentRecordingMode || DEFAULT_RECORDING_MODE;
+      const needsMicrophone = finalMode === 'microphone-only' || finalMode === 'mixed';
+      const needsSystemAudio = finalMode === 'system-audio-only' || finalMode === 'mixed';
+
       // Check for device-related errors
-      if (errorMsg.includes('microphone') || errorMsg.includes('mic') || errorMsg.includes('input')) {
+      if ((errorMsg.includes('microphone') || errorMsg.includes('mic') || errorMsg.includes('input')) && needsMicrophone) {
         setDeviceError({
           title: 'Microphone Not Available',
           message: 'Unable to access your microphone. Please check that:\n• Your microphone is connected\n• The app has microphone permissions\n• No other app is using the microphone'
         });
-      } else if (errorMsg.includes('system audio') || errorMsg.includes('speaker') || errorMsg.includes('output')) {
+      } else if ((errorMsg.includes('system audio') || errorMsg.includes('speaker') || errorMsg.includes('output')) && needsSystemAudio) {
         setDeviceError({
           title: 'System Audio Not Available',
           message: 'Unable to capture system audio. Please check that:\n• A virtual audio device (like BlackHole) is installed\n• The app has screen recording permissions (macOS)\n• System audio is properly configured'
@@ -174,23 +183,23 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
       const dataDir = await appDataDir();
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const savePath = `${dataDir}/recording-${timestamp}.wav`;
-      
+
       console.log('Saving recording to:', savePath);
       console.log('About to call stop_recording command');
-      const result = await invoke('stop_recording', { 
+      const result = await invoke('stop_recording', {
         args: {
           save_path: savePath
         }
       });
       console.log('stop_recording command completed successfully:', result);
-      
+
       setRecordingPath(savePath);
       // setShowPlayback(true);
       setIsProcessing(false);
-      
+
       // Track successful transcription
       Analytics.trackTranscriptionSuccess();
-      
+
       onRecordingStop(true);
     } catch (error) {
       console.error('Failed to stop recording:', error);

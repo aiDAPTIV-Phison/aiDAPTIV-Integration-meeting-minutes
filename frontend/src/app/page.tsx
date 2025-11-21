@@ -7,7 +7,7 @@ import { EditableTitle } from '@/components/EditableTitle';
 import { TranscriptView } from '@/components/TranscriptView';
 import { RecordingControls } from '@/components/RecordingControls';
 import { AISummary } from '@/components/AISummary';
-import { DeviceSelection, SelectedDevices } from '@/components/DeviceSelection';
+import { DeviceSelection, SelectedDevices, filterDevicesByRecordingMode, DEFAULT_RECORDING_MODE } from '@/components/DeviceSelection';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { TranscriptSettings, TranscriptModelProps } from '@/components/TranscriptSettings';
 import { LanguageSelection } from '@/components/LanguageSelection';
@@ -87,10 +87,54 @@ export default function Home() {
   const [chunkDropMessage, setChunkDropMessage] = useState('');
   const [isSavingTranscript, setIsSavingTranscript] = useState(false);
   const [isRecordingDisabled, setIsRecordingDisabled] = useState(false);
-  const [selectedDevices, setSelectedDevices] = useState<SelectedDevices>({
-    micDevice: null,
-    systemDevice: null
-  });
+  
+  // Load selectedDevices from localStorage on initialization
+  const loadSelectedDevicesFromStorage = (): SelectedDevices => {
+    if (typeof window === 'undefined') {
+      return {
+        micDevice: null,
+        systemDevice: null,
+        recordingMode: DEFAULT_RECORDING_MODE
+      };
+    }
+    
+    try {
+      const stored = localStorage.getItem('selectedDevices');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Validate the structure
+        if (parsed && typeof parsed === 'object') {
+          return {
+            micDevice: parsed.micDevice ?? null,
+            systemDevice: parsed.systemDevice ?? null,
+            recordingMode: parsed.recordingMode ?? DEFAULT_RECORDING_MODE
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load selectedDevices from localStorage:', error);
+    }
+    
+    return {
+      micDevice: null,
+      systemDevice: null,
+      recordingMode: DEFAULT_RECORDING_MODE
+    };
+  };
+  
+  const [selectedDevices, setSelectedDevices] = useState<SelectedDevices>(loadSelectedDevicesFromStorage());
+  
+  // Save selectedDevices to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('selectedDevices', JSON.stringify(selectedDevices));
+        console.log('🔍 [page.tsx] Saved selectedDevices to localStorage:', selectedDevices);
+      } catch (error) {
+        console.error('Failed to save selectedDevices to localStorage:', error);
+      }
+    }
+  }, [selectedDevices]);
   const [showDeviceSettings, setShowDeviceSettings] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [modelSelectorMessage, setModelSelectorMessage] = useState('');
@@ -749,12 +793,19 @@ export default function Home() {
             const generatedMeetingTitle = `Meeting ${day}_${month}_${year}_${hours}_${minutes}_${seconds}`;
 
             console.log('Auto-starting backend recording with meeting:', generatedMeetingTitle);
-            const result = await invoke('start_recording_with_devices_and_meeting', {
-              mic_device_name: selectedDevices?.micDevice || null,
-              system_device_name: selectedDevices?.systemDevice || null,
-              meeting_name: generatedMeetingTitle
+
+            // Filter devices based on recording mode using shared utility function
+            const { micDeviceName, systemDeviceName, recordingMode } = filterDevicesByRecordingMode(selectedDevices);
+
+            // Defensive check: Ensure recordingMode always has a value
+            const finalRecordingMode = recordingMode || DEFAULT_RECORDING_MODE;
+
+            await invoke('start_recording_with_devices_and_meeting', {
+              micDeviceName: micDeviceName,       // Maps to Rust mic_device_name
+              systemDeviceName: systemDeviceName, // Maps to Rust system_device_name
+              meetingName: generatedMeetingTitle, // Maps to Rust meeting_name
+              recordingMode: finalRecordingMode   // Maps to Rust recording_mode
             });
-            console.log('Auto-start backend recording result:', result);
 
             // Update UI state after successful backend start
             setMeetingTitle(generatedMeetingTitle);
@@ -774,7 +825,13 @@ export default function Home() {
       }
     };
 
-    checkAutoStartRecording();
+    // Add a small delay to ensure selectedDevices is loaded from localStorage
+    // This is important when page reloads from tray menu
+    const timeoutId = setTimeout(() => {
+      checkAutoStartRecording();
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
   }, [isRecording, isMeetingActive, selectedDevices]);
 
   const handleRecordingStop = async () => {
@@ -953,7 +1010,7 @@ export default function Home() {
       if (isCallApi && transcriptionComplete == true) {
 
         setIsSavingTranscript(true);
-
+        
         // Get fresh transcript state (ALL transcripts including late ones)
         const freshTranscripts = [...transcriptsRef.current];
 

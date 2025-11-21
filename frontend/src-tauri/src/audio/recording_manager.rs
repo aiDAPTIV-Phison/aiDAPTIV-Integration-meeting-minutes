@@ -4,6 +4,7 @@ use anyhow::Result;
 use log::{debug, error, info, warn};
 
 use super::devices::{AudioDevice, list_audio_devices};
+use super::recording_commands::RecordingMode;
 
 #[cfg(target_os = "macos")]
 use super::devices::get_safe_recording_devices_macos;
@@ -59,8 +60,12 @@ impl RecordingManager {
         &mut self,
         microphone_device: Option<Arc<AudioDevice>>,
         system_device: Option<Arc<AudioDevice>>,
+        recording_mode: RecordingMode,
     ) -> Result<mpsc::UnboundedReceiver<AudioChunk>> {
-        info!("Starting recording manager");
+        info!("tarting recording manager - mode={:?}, mic={:?}, system={:?}",
+              recording_mode,
+              microphone_device.as_ref().map(|d| d.name.as_str()),
+              system_device.as_ref().map(|d| d.name.as_str()));
 
         // Set up transcription channel
         let (transcription_sender, transcription_receiver) = mpsc::unbounded_channel::<AudioChunk>();
@@ -96,8 +101,8 @@ impl RecordingManager {
             system_device.as_ref().map(|d| d.name.clone())
         );
 
-        // Start the audio processing pipeline with FFmpeg adaptive mixer
-        // Pipeline will: 1) Mix mic+system audio with adaptive buffering, 2) Send mixed to recording_sender,
+        // Start the audio processing pipeline with recording mode
+        // Pipeline will: 1) Mix mic+system audio with adaptive buffering (if mixed mode), 2) Send to recording_sender,
         // 3) Apply VAD and send speech segments to transcription
         self.pipeline_manager.start(
             self.state.clone(),
@@ -109,6 +114,7 @@ impl RecordingManager {
             mic_kind,
             sys_name,
             sys_kind,
+            recording_mode,
         )?;
 
         // Give the pipeline a moment to fully initialize before starting streams
@@ -116,11 +122,18 @@ impl RecordingManager {
 
         // Start audio streams - they send RAW unmixed chunks to pipeline for mixing
         // Pipeline handles mixing and distribution to both recording and transcription
+        info!("Starting streams - mode={:?}, mic={:?}, system={:?}",
+              recording_mode,
+              microphone_device.as_ref().map(|d| d.name.clone()),
+              system_device.as_ref().map(|d| d.name.clone()));
         self.stream_manager.start_streams(microphone_device.clone(), system_device.clone(), None).await?;
 
         // Start device monitoring to detect disconnects
         if let Some(ref mut monitor) = self.device_monitor {
-            if let Err(e) = monitor.start_monitoring(microphone_device, system_device) {
+            info!("🔍 [RecordingManager] Starting device monitoring - mic={:?}, system={:?}",
+                  microphone_device.as_ref().map(|d| d.name.clone()),
+                  system_device.as_ref().map(|d| d.name.clone()));
+            if let Err(e) = monitor.start_monitoring(microphone_device.clone(), system_device.clone()) {
                 warn!("Failed to start device monitoring: {}", e);
                 // Non-fatal - continue without monitoring
             } else {
@@ -170,13 +183,13 @@ impl RecordingManager {
             let microphone_device = microphone_device.map(Arc::new);
             let system_device = system_device.map(Arc::new);
 
-            // Ensure at least microphone is available
-            if microphone_device.is_none() {
-                return Err(anyhow::anyhow!("❌ No microphone device available for recording"));
+            // Ensure at least one device is available
+            if microphone_device.is_none() && system_device.is_none() {
+                return Err(anyhow::anyhow!("❌ No audio device available for recording"));
             }
 
-            // Start recording with selected devices
-            self.start_recording(microphone_device, system_device).await
+            // Start recording with selected devices (default to Mixed mode for backward compatibility)
+            self.start_recording(microphone_device, system_device, RecordingMode::Mixed).await
         }
 
         #[cfg(not(target_os = "macos"))]
@@ -206,12 +219,14 @@ impl RecordingManager {
                 }
             };
 
-            // Ensure at least microphone is available
-            if microphone_device.is_none() {
-                return Err(anyhow::anyhow!("No microphone device available"));
+            // Ensure at least one device is available
+            if microphone_device.is_none() && system_device.is_none() {
+                return Err(anyhow::anyhow!("No audio device available"));
             }
 
-            self.start_recording(microphone_device, system_device).await
+            // Start recording with selected devices (default to Mixed mode for backward compatibility)
+            info!("🎙️ [recording_manager] ⚠️ HARDCODING RecordingMode::Mixed in start_recording_with_defaults (Windows/Linux path)");
+            self.start_recording(microphone_device, system_device, RecordingMode::Mixed).await
         }
     }
 

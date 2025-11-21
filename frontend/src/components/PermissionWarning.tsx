@@ -16,8 +16,8 @@ export function PermissionWarning({
   onRecheck,
   isRechecking = false
 }: PermissionWarningProps) {
-  // Don't show if both permissions are granted
-  if (hasMicrophone && hasSystemAudio) {
+  // Don't show if at least one permission is granted (can record with either microphone or system audio)
+  if (hasMicrophone || hasSystemAudio) {
     return null;
   }
 
@@ -45,8 +45,8 @@ export function PermissionWarning({
 
   return (
     <div className="max-w-md mb-4 space-y-3">
-      {/* Combined Permission Warning - Show when either permission is missing */}
-      {(!hasMicrophone || !hasSystemAudio) && (
+      {/* Combined Permission Warning - Show only when both permissions are missing */}
+      {(!hasMicrophone && !hasSystemAudio) && (
         <Alert variant="destructive" className="border-amber-400 bg-amber-50">
           <AlertTriangle className="h-5 w-5 text-amber-600" />
           <AlertTitle className="text-amber-900 font-semibold">

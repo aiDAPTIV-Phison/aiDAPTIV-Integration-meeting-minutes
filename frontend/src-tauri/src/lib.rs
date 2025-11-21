@@ -101,6 +101,7 @@ async fn start_recording<R: Runtime>(
         mic_device_name,
         system_device_name,
         meeting_name.clone(),
+        None, // recording_mode - use default
     )
     .await
     {
@@ -290,7 +291,7 @@ async fn start_recording_with_devices<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
 ) -> Result<(), String> {
-    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None).await
+    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None, None).await
 }
 
 #[tauri::command]
@@ -299,38 +300,56 @@ async fn start_recording_with_devices_and_meeting<R: Runtime>(
     mic_device_name: Option<String>,
     system_device_name: Option<String>,
     meeting_name: Option<String>,
+    recording_mode: Option<String>,  // Changed to String to handle Tauri serialization
 ) -> Result<(), String> {
-    log_info!("🚀 CALLED start_recording_with_devices_and_meeting - Mic: {:?}, System: {:?}, Meeting: {:?}",
-             mic_device_name, system_device_name, meeting_name);
+    // Manually convert string to RecordingMode enum
+    // Tauri's JSON serialization doesn't properly handle enum deserialization with rename_all
+    let recording_mode_enum: Option<audio::recording_commands::RecordingMode> = 
+        recording_mode.as_ref().and_then(|mode_str| {
+            match mode_str.as_str() {
+                "microphone-only" => Some(audio::recording_commands::RecordingMode::MicrophoneOnly),
+                "system-audio-only" => Some(audio::recording_commands::RecordingMode::SystemAudioOnly),
+                "mixed" => Some(audio::recording_commands::RecordingMode::Mixed),
+                _ => None
+            }
+        });
+
+    // Warn if recording_mode conversion failed or is None
+    if recording_mode_enum.is_none() && recording_mode.is_some() {
+        log::warn!("⚠️ Failed to parse recording_mode '{}'! This will use default SystemAudioOnly mode.", 
+                  recording_mode.as_ref().unwrap());
+    } else if recording_mode_enum.is_none() {
+        log::warn!("⚠️ recording_mode is None! This will use default SystemAudioOnly mode. If you intended to specify a mode, check frontend code.");
+    }
 
     // Clone meeting_name for notification use later
     let meeting_name_for_notification = meeting_name.clone();
 
     // Call the recording module functions that support meeting names
-    let recording_result = match (mic_device_name.clone(), system_device_name.clone()) {
-        (None, None) => {
-            log_info!(
-                "No devices specified, starting with defaults and meeting: {:?}",
-                meeting_name
-            );
-            audio::recording_commands::start_recording_with_meeting_name(app.clone(), meeting_name)
-                .await
-        }
-        _ => {
-            log_info!(
-                "Starting with specified devices: mic={:?}, system={:?}, meeting={:?}",
-                mic_device_name,
-                system_device_name,
-                meeting_name
-            );
-            audio::recording_commands::start_recording_with_devices_and_meeting(
-                app.clone(),
-                mic_device_name,
-                system_device_name,
-                meeting_name,
-            )
+    // CRITICAL: If recording_mode is specified, ALWAYS use start_recording_with_devices_and_meeting
+    // to ensure the mode is properly applied, even if devices are None (will use defaults in recording_commands.rs)
+    // Priority: recording_mode_enum > device names > meeting_name
+    let recording_result = if recording_mode_enum.is_some() {
+        audio::recording_commands::start_recording_with_devices_and_meeting(
+            app.clone(),
+            mic_device_name,
+            system_device_name,
+            meeting_name,
+            recording_mode_enum,
+        )
+        .await
+    } else if mic_device_name.is_some() || system_device_name.is_some() {
+        audio::recording_commands::start_recording_with_devices_and_meeting(
+            app.clone(),
+            mic_device_name,
+            system_device_name,
+            meeting_name,
+            None,
+        )
+        .await
+    } else {
+        audio::recording_commands::start_recording_with_meeting_name(app.clone(), meeting_name)
             .await
-        }
     };
 
     match recording_result {

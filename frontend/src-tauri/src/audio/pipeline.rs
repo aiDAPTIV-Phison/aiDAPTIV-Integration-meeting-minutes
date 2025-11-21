@@ -12,6 +12,7 @@ use super::devices::AudioDevice;
 use super::recording_state::{AudioChunk, AudioError, RecordingState, DeviceType};
 use super::audio_processing::{audio_to_mono, LoudnessNormalizer, NoiseSuppressionProcessor, HighPassFilter};
 use super::vad::{ContinuousVadProcessor};
+use super::recording_commands::RecordingMode;
 
 /// Ring buffer for synchronized audio mixing
 /// Accumulates samples from mic and system streams until we have aligned windows
@@ -20,10 +21,11 @@ struct AudioMixerRingBuffer {
     system_buffer: VecDeque<f32>,
     window_size_samples: usize,  // Fixed mixing window (e.g., 50ms)
     max_buffer_size: usize,  // Safety limit (e.g., 100ms)
+    recording_mode: RecordingMode,  // Recording mode determines mixing behavior
 }
 
 impl AudioMixerRingBuffer {
-    fn new(sample_rate: u32) -> Self {
+    fn new(sample_rate: u32, recording_mode: RecordingMode) -> Self {
         // Use 50ms windows for mixing
         let window_ms = 600.0;
         let window_size_samples = (sample_rate as f32 * window_ms / 1000.0) as usize;
@@ -34,19 +36,45 @@ impl AudioMixerRingBuffer {
         // Accounts for: RNNoise buffering + Core Audio jitter + processing delays
         let max_buffer_size = window_size_samples * 8;  // 400ms (was 200ms)
 
-        info!("🔊 Ring buffer initialized: window={}ms ({} samples), max={}ms ({} samples)",
+        info!("🔊 Ring buffer initialized: window={}ms ({} samples), max={}ms ({} samples), mode={:?}",
               window_ms, window_size_samples,
-              window_ms * 8.0, max_buffer_size);
+              window_ms * 8.0, max_buffer_size, recording_mode);
 
         Self {
             mic_buffer: VecDeque::with_capacity(max_buffer_size),
             system_buffer: VecDeque::with_capacity(max_buffer_size),
             window_size_samples,
             max_buffer_size,
+            recording_mode,
         }
     }
 
     fn add_samples(&mut self, device_type: DeviceType, samples: Vec<f32>) {
+        // Filter samples based on recording mode to avoid unnecessary buffering
+        match self.recording_mode {
+            RecordingMode::MicrophoneOnly => {
+                // Only accept microphone samples, ignore system audio
+                if matches!(device_type, DeviceType::Microphone) {
+                    self.mic_buffer.extend(samples);
+                }
+                // System audio samples are ignored
+            }
+            RecordingMode::SystemAudioOnly => {
+                // Only accept system audio samples, ignore microphone
+                if matches!(device_type, DeviceType::System) {
+                    self.system_buffer.extend(samples);
+                }
+                // Microphone samples are ignored
+            }
+            RecordingMode::Mixed => {
+                // Accept both types of samples
+                match device_type {
+                    DeviceType::Microphone => self.mic_buffer.extend(samples),
+                    DeviceType::System => self.system_buffer.extend(samples),
+                }
+            }
+        }
+
         // Log buffer health periodically for diagnostics
         static mut SAMPLE_COUNTER: u64 = 0;
         unsafe {
@@ -55,11 +83,6 @@ impl AudioMixerRingBuffer {
                 debug!("📊 Ring buffer status: mic={} samples, sys={} samples (max={})",
                        self.mic_buffer.len(), self.system_buffer.len(), self.max_buffer_size);
             }
-        }
-
-        match device_type {
-            DeviceType::Microphone => self.mic_buffer.extend(samples),
-            DeviceType::System => self.system_buffer.extend(samples),
         }
 
         // CRITICAL FIX: Add warnings before dropping samples
@@ -85,8 +108,35 @@ impl AudioMixerRingBuffer {
     }
 
     fn can_mix(&self) -> bool {
-        self.mic_buffer.len() >= self.window_size_samples ||
-        self.system_buffer.len() >= self.window_size_samples
+        match self.recording_mode {
+            RecordingMode::MicrophoneOnly => {
+                self.mic_buffer.len() >= self.window_size_samples
+            }
+            RecordingMode::SystemAudioOnly => {
+                self.system_buffer.len() >= self.window_size_samples
+            }
+            RecordingMode::Mixed => {
+                self.mic_buffer.len() >= self.window_size_samples ||
+                self.system_buffer.len() >= self.window_size_samples
+            }
+        }
+    }
+
+    fn extract_single_window(buffer: &mut VecDeque<f32>, window_size: usize) -> Vec<f32> {
+        if buffer.len() >= window_size {
+            // Case 1: Enough data, extract exactly window_size_samples
+            buffer.drain(0..window_size).collect()
+        } else if !buffer.is_empty() {
+            // Case 2: Some data but not enough, extract all and pad
+            let available: Vec<f32> = buffer.drain(..).collect();
+            let mut padded = Vec::with_capacity(window_size);
+            padded.extend_from_slice(&available);
+            padded.resize(window_size, 0.0);
+            padded
+        } else {
+            // Case 3: Empty buffer, return all zeros
+            vec![0.0; window_size]
+        }
     }
 
     fn extract_window(&mut self) -> Option<(Vec<f32>, Vec<f32>)> {
@@ -94,50 +144,24 @@ impl AudioMixerRingBuffer {
             return None;
         }
 
-        // Extract mic window with zero-padding for incomplete buffers
-        // Zero-padding (silence) is preferred over last-sample-hold to prevent artifacts
+        let window_size = self.window_size_samples;
 
-        // Extract mic window (or pad with zeros if insufficient data)
-        let mic_window = if self.mic_buffer.len() >= self.window_size_samples {
-            // Enough mic data - drain window
-            self.mic_buffer.drain(0..self.window_size_samples).collect()
-        } else if !self.mic_buffer.is_empty() {
-            // Some mic data but not enough - consume all + pad with zeros
-            let available: Vec<f32> = self.mic_buffer.drain(..).collect();
-            let mut padded = Vec::with_capacity(self.window_size_samples);
-            padded.extend_from_slice(&available);
-
-            // Use zero-padding (silence) to prevent repetition artifacts
-            // Zero-padding is inaudible at 48kHz sample rate
-            padded.resize(self.window_size_samples, 0.0);
-
-            padded
-        } else {
-            // No mic data - return silence
-            vec![0.0; self.window_size_samples]
-        };
-
-        // Extract system window (or pad with zeros if insufficient data)
-        let sys_window = if self.system_buffer.len() >= self.window_size_samples {
-            // Enough system data - drain window
-            self.system_buffer.drain(0..self.window_size_samples).collect()
-        } else if !self.system_buffer.is_empty() {
-            // Some system data but not enough - consume all + pad with zeros
-            let available: Vec<f32> = self.system_buffer.drain(..).collect();
-            let mut padded = Vec::with_capacity(self.window_size_samples);
-            padded.extend_from_slice(&available);
-
-            // Use zero-padding (silence) to prevent repetition artifacts
-            // Zero-padding is inaudible at 48kHz sample rate
-            padded.resize(self.window_size_samples, 0.0);
-
-            padded
-        } else {
-            // No system data - return silence
-            vec![0.0; self.window_size_samples]
-        };
-
-        Some((mic_window, sys_window))
+        // Extract windows based on recording mode
+        match self.recording_mode {
+            RecordingMode::MicrophoneOnly => {
+                let mic_window = Self::extract_single_window(&mut self.mic_buffer, window_size);
+                Some((mic_window, vec![]))
+            }
+            RecordingMode::SystemAudioOnly => {
+                let sys_window = Self::extract_single_window(&mut self.system_buffer, window_size);
+                Some((vec![], sys_window))
+            }
+            RecordingMode::Mixed => {
+                let mic_window = Self::extract_single_window(&mut self.mic_buffer, window_size);
+                let sys_window = Self::extract_single_window(&mut self.system_buffer, window_size);
+                Some((mic_window, sys_window))
+            }
+        }
     }
 
 }
@@ -595,7 +619,7 @@ impl AudioCapture {
         //     let raw_peak = mono_data.iter().map(|&x| x.abs()).fold(0.0f32, f32::max);
         //     info!("🔊 [{:?}] Chunk {} - Raw: RMS={:.6}, Peak={:.6}",
         //       self.device_type, chunk_id, raw_rms, raw_peak);
-            
+
         //     // Warn if system audio is completely silent
         //     if raw_rms == 0.0 && raw_peak == 0.0 {
         //         warn!("⚠️ System audio producing ZERO audio - check permissions or hardware!");
@@ -694,6 +718,8 @@ pub struct AudioPipeline {
     mixer: ProfessionalAudioMixer,
     // Recording sender for pre-mixed audio
     recording_sender_for_mixed: Option<mpsc::UnboundedSender<AudioChunk>>,
+    // Recording mode determines mixing behavior
+    recording_mode: RecordingMode,
 }
 
 impl AudioPipeline {
@@ -707,6 +733,7 @@ impl AudioPipeline {
         mic_device_kind: super::device_detection::InputDeviceKind,
         system_device_name: String,
         system_device_kind: super::device_detection::InputDeviceKind,
+        recording_mode: RecordingMode,
     ) -> Self {
         // Log device characteristics for adaptive buffering
         info!("🎛️ AudioPipeline initializing with device characteristics:");
@@ -738,7 +765,7 @@ impl AudioPipeline {
         };
 
         // Initialize professional audio mixing components
-        let ring_buffer = AudioMixerRingBuffer::new(sample_rate);
+        let ring_buffer = AudioMixerRingBuffer::new(sample_rate, recording_mode);
         let mixer = ProfessionalAudioMixer::new(sample_rate);
 
         // Note: target_chunk_duration_ms is ignored - VAD controls segmentation now
@@ -760,6 +787,7 @@ impl AudioPipeline {
             ring_buffer,
             mixer,
             recording_sender_for_mixed: None,  // Will be set by manager
+            recording_mode,
         }
     }
 
@@ -814,24 +842,59 @@ impl AudioPipeline {
                         self.last_summary_time = std::time::Instant::now();
                     }
 
-                    // STEP 1: Add raw audio to ring buffer for mixing
+                    // STEP 1: Filter chunks based on recording mode before adding to buffer
+                    // This prevents unnecessary processing of unwanted audio sources
+                    let should_process = match self.recording_mode {
+                        RecordingMode::MicrophoneOnly => {
+                            matches!(chunk.device_type, DeviceType::Microphone)
+                        }
+                        RecordingMode::SystemAudioOnly => {
+                            matches!(chunk.device_type, DeviceType::System)
+                        }
+                        RecordingMode::Mixed => {
+                            true // Process both types in mixed mode
+                        }
+                    };
+
+                    if !should_process {
+                        // Skip this chunk - it's from an unwanted audio source
+                        // Use info level for critical filtering to ensure visibility
+                        info!("🚫 [Pipeline] FILTERING OUT chunk from {:?} in {:?} mode (chunk_id: {})",
+                               chunk.device_type, self.recording_mode, chunk.chunk_id);
+                        continue;
+                    }
+
+                    // STEP 2: Add raw audio to ring buffer for mixing
                     // Microphone audio is already normalized at capture level (AudioCapture)
                     // System audio remains raw
                     self.ring_buffer.add_samples(chunk.device_type.clone(), chunk.data);
 
-                    // STEP 2: Mix audio in fixed windows when both streams have sufficient data
+                    // STEP 3: Process audio in fixed windows when streams have sufficient data
                     while self.ring_buffer.can_mix() {
                         if let Some((mic_window, sys_window)) = self.ring_buffer.extract_window() {
-                            // Simple mixing without aggressive ducking
-                            let mixed_clean = self.mixer.mix_window(&mic_window, &sys_window);
+                            // Process audio based on recording mode
+                            let final_audio = match self.recording_mode {
+                                RecordingMode::MicrophoneOnly => {
+                                    // Use microphone audio directly, no mixing
+                                    mic_window
+                                }
+                                RecordingMode::SystemAudioOnly => {
+                                    // Use system audio directly, no mixing
+                                    sys_window
+                                }
+                                RecordingMode::Mixed => {
+                                    // Mix both audio sources
+                                    self.mixer.mix_window(&mic_window, &sys_window)
+                                }
+                            };
 
                             // NO POST-GAIN NEEDED: Microphone already normalized by EBU R128 to -23 LUFS
                             // This is broadcast-standard loudness (Netflix/YouTube/Spotify level)
                             // System audio at natural levels
                             // Previous 2x gain was causing excessive limiting/distortion
-                            let mixed_with_gain = mixed_clean;
+                            let mixed_with_gain = final_audio;
 
-                            // STEP 3: Send mixed audio for transcription (VAD + Whisper)
+                            // STEP 4: Send mixed audio for transcription (VAD + Whisper)
                             match self.vad_processor.process_audio(&mixed_with_gain) {
                                 Ok(speech_segments) => {
                                     for segment in speech_segments {
@@ -865,7 +928,7 @@ impl AudioPipeline {
                                 }
                             }
 
-                            // STEP 4: Send mixed audio for recording (WAV file)
+                            // STEP 5: Send mixed audio for recording (WAV file)
                             if let Some(ref sender) = self.recording_sender_for_mixed {
                                 let recording_chunk = AudioChunk {
                                     data: mixed_with_gain.clone(),
@@ -966,11 +1029,13 @@ impl AudioPipelineManager {
         mic_device_kind: super::device_detection::InputDeviceKind,
         system_device_name: String,
         system_device_kind: super::device_detection::InputDeviceKind,
+        recording_mode: RecordingMode,
     ) -> Result<()> {
         // Log device information for adaptive buffering
         info!("🎙️ Starting pipeline with device info:");
         info!("   Microphone: '{}' ({:?})", mic_device_name, mic_device_kind);
         info!("   System Audio: '{}' ({:?})", system_device_name, system_device_kind);
+        info!("   Recording Mode: {:?}", recording_mode);
 
         // Create audio processing channel
         let (audio_sender, audio_receiver) = mpsc::unbounded_channel::<AudioChunk>();
@@ -989,6 +1054,7 @@ impl AudioPipelineManager {
             mic_device_kind,
             system_device_name,
             system_device_kind,
+            recording_mode,
         );
 
         // CRITICAL FIX: Connect recording sender to receive pre-mixed audio

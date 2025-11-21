@@ -11,9 +11,62 @@ export interface AudioDevice {
   device_type: 'Input' | 'Output';
 }
 
+export type RecordingMode = 'microphone-only' | 'system-audio-only' | 'mixed';
+
+// Default recording mode constant
+export const DEFAULT_RECORDING_MODE: RecordingMode = 'system-audio-only';
+
 export interface SelectedDevices {
   micDevice: string | null;
   systemDevice: string | null;
+  recordingMode?: RecordingMode;
+}
+
+/**
+ * Helper function to ensure device name has the correct suffix for backend parsing
+ * Backend expects device names in format: "Device Name (input)" or "Device Name (output)"
+ */
+function ensureDeviceNameSuffix(deviceName: string | null, suffix: '(input)' | '(output)'): string | null {
+  if (!deviceName) return null;
+  
+  // Check if device name already has a suffix
+  const lowerName = deviceName.toLowerCase();
+  if (lowerName.endsWith('(input)') || lowerName.endsWith('(output)')) {
+    // Already has suffix, return as is
+    return deviceName;
+  }
+  
+  // Add the required suffix
+  return `${deviceName} (${suffix === '(input)' ? 'input' : 'output'})`;
+}
+
+/**
+ * Filter devices based on recording mode
+ * This ensures only required devices are passed to the backend
+ * @param selectedDevices - Current device selection
+ * @returns Filtered device names and recording mode
+ */
+export function filterDevicesByRecordingMode(
+  selectedDevices: SelectedDevices
+): { micDeviceName: string | null; systemDeviceName: string | null; recordingMode: RecordingMode } {
+  const recordingMode = selectedDevices?.recordingMode || DEFAULT_RECORDING_MODE;
+  
+  let micDeviceName: string | null = null;
+  let systemDeviceName: string | null = null;
+
+  if (recordingMode === 'microphone-only') {
+    micDeviceName = ensureDeviceNameSuffix(selectedDevices?.micDevice || null, '(input)');
+    systemDeviceName = null;
+  } else if (recordingMode === 'system-audio-only') {
+    micDeviceName = null;
+    systemDeviceName = ensureDeviceNameSuffix(selectedDevices?.systemDevice || null, '(output)');
+  } else {
+    // Mixed mode - use both devices as specified
+    micDeviceName = ensureDeviceNameSuffix(selectedDevices?.micDevice || null, '(input)');
+    systemDeviceName = ensureDeviceNameSuffix(selectedDevices?.systemDevice || null, '(output)');
+  }
+
+  return { micDeviceName, systemDeviceName, recordingMode };
 }
 
 export interface AudioLevelData {
@@ -132,6 +185,24 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
     }
 
     return { isBluetooth, category };
+  };
+
+  // Handle recording mode change
+  const handleRecordingModeChange = (mode: RecordingMode) => {
+    const currentMode = selectedDevices.recordingMode || DEFAULT_RECORDING_MODE;
+    const newDevices: SelectedDevices = {
+      ...selectedDevices,
+      recordingMode: mode
+    };
+
+    // Clear irrelevant device selections when mode changes
+    if (mode === 'microphone-only') {
+      newDevices.systemDevice = null;
+    } else if (mode === 'system-audio-only') {
+      newDevices.micDevice = null;
+    }
+    // For 'mixed' mode, keep both devices
+    onDeviceChange(newDevices);
   };
 
   // Handle microphone device selection
@@ -258,6 +329,28 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
       )}
 
       <div className="space-y-3">
+        {/* Recording Mode Selection */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            Recording Mode
+          </label>
+          <select
+            value={selectedDevices.recordingMode || DEFAULT_RECORDING_MODE}
+            onChange={(e) => handleRecordingModeChange(e.target.value as RecordingMode)}
+            disabled={disabled}
+            className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+          >
+            <option value="microphone-only">Microphone Only</option>
+            <option value="system-audio-only">System Audio Only</option>
+            <option value="mixed">Mixed (Microphone + System Audio)</option>
+          </select>
+          <p className="text-xs text-gray-500">
+            {selectedDevices.recordingMode === 'microphone-only' && 'Only microphone audio will be recorded'}
+            {selectedDevices.recordingMode === 'system-audio-only' && 'Only system audio will be recorded'}
+            {(!selectedDevices.recordingMode || selectedDevices.recordingMode === 'mixed') && 'Both microphone and system audio will be mixed together'}
+          </p>
+        </div>
+
         {/* Microphone Selection */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -269,7 +362,7 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
           <select
             value={selectedDevices.micDevice || 'default'}
             onChange={(e) => handleMicDeviceChange(e.target.value)}
-            disabled={disabled}
+            disabled={disabled || (selectedDevices.recordingMode || DEFAULT_RECORDING_MODE) === 'system-audio-only'}
             className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
           >
             <option value="default">Default Microphone</option>
@@ -330,7 +423,7 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
           <select
             value={selectedDevices.systemDevice || 'default'}
             onChange={(e) => handleSystemDeviceChange(e.target.value)}
-            disabled={disabled}
+            disabled={disabled || (selectedDevices.recordingMode || DEFAULT_RECORDING_MODE) === 'microphone-only'}
             className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
           >
             <option value="default">Default System Audio</option>
