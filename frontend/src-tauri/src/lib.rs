@@ -611,6 +611,9 @@ pub fn run() {
             // Chat commands
             chat::chat_send_message,
             chat::chat_get_meeting_context,
+            chat::chat_get_history,
+            chat::chat_save_message,
+            chat::chat_clear_history,
             openrouter::get_openrouter_models,
             audio::recording_preferences::get_recording_preferences,
             audio::recording_preferences::set_recording_preferences,

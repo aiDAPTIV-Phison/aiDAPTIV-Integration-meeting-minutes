@@ -133,21 +133,45 @@ export function ChatPanel({
     updatePreview();
   }, [aiSummary, previewEditor]);
 
-  // Load meeting context on mount
+  // Load meeting context and chat history on mount
   useEffect(() => {
-    const loadContext = async () => {
+    const loadData = async () => {
       try {
+        // Load meeting context
         const meetingContext = await invoke<MeetingContext>('chat_get_meeting_context', {
           meetingId: meeting.id
         });
         setContext(meetingContext);
+
+        // Load chat history from database
+        const history = await invoke<Array<{
+          id: string;
+          role: string;
+          content: string;
+          timestamp: string;
+          ttft_us?: number;
+        }>>('chat_get_history', {
+          meetingId: meeting.id
+        });
+
+        // Convert history to Message format
+        const loadedMessages: Message[] = history.map(h => ({
+          id: h.id,
+          role: h.role as 'user' | 'assistant',
+          content: h.content,
+          timestamp: new Date(h.timestamp),
+          ttft_us: h.ttft_us
+        }));
+
+        setMessages(loadedMessages);
+        console.log(`Loaded ${loadedMessages.length} messages from database`);
       } catch (error) {
-        console.error('Failed to load meeting context:', error);
-        toast.error('Failed to load meeting transcript');
+        console.error('Failed to load chat data:', error);
+        toast.error('Failed to load chat data');
       }
     };
 
-    loadContext();
+    loadData();
   }, [meeting.id]);
 
   // Set up streaming event listeners
@@ -178,22 +202,37 @@ export function ChatPanel({
       });
 
       // Listen for completion
-      doneUnlisten = await listen('llm:chat:done', (event: any) => {
+      doneUnlisten = await listen('llm:chat:done', async (event: any) => {
         const { request_id, ttft_us } = event.payload;
         if (request_id === meeting.id) {
-          // Update the last assistant message with TTFT
-          if (ttft_us !== undefined) {
-            setMessages(prev => {
-              const newMessages = [...prev];
-              if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'assistant') {
+          // Get the final assistant message and save to database
+          setMessages(prev => {
+            const newMessages = [...prev];
+            if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'assistant') {
+              // Update with TTFT if available
+              if (ttft_us !== undefined) {
                 newMessages[newMessages.length - 1] = {
                   ...newMessages[newMessages.length - 1],
                   ttft_us: ttft_us
                 };
               }
-              return newMessages;
-            });
-          }
+
+              // Save to database (async, don't block UI)
+              const finalMessage = newMessages[newMessages.length - 1];
+              invoke('chat_save_message', {
+                meetingId: meeting.id,
+                role: finalMessage.role,
+                content: finalMessage.content,
+                ttftUs: finalMessage.ttft_us ?? null
+              }).then(() => {
+                console.log('Assistant message saved to database');
+              }).catch(error => {
+                console.error('Failed to save assistant message:', error);
+              });
+            }
+            return newMessages;
+          });
+
           setIsLoading(false);
         }
       });
@@ -266,6 +305,18 @@ export function ChatPanel({
     setInput('');
     setIsLoading(true);
 
+    // Save user message to database (async, don't block)
+    invoke('chat_save_message', {
+      meetingId: meeting.id,
+      role: 'user',
+      content: userMessage.content,
+      ttftUs: null
+    }).then(() => {
+      console.log('User message saved to database');
+    }).catch(error => {
+      console.error('Failed to save user message:', error);
+    });
+
     // Re-enable auto-scroll when sending a new message
     shouldAutoScrollRef.current = true;
 
@@ -335,12 +386,23 @@ export function ChatPanel({
     }
   };
 
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
     if (messages.length === 0) return;
 
     if (window.confirm('Are you sure you want to clear all chat history? This action cannot be undone.')) {
-      setMessages([]);
-      toast.success('Chat history cleared');
+      try {
+        // Clear from database
+        await invoke('chat_clear_history', {
+          meetingId: meeting.id
+        });
+
+        // Clear from state
+        setMessages([]);
+        toast.success('Chat history cleared');
+      } catch (error) {
+        console.error('Failed to clear chat history:', error);
+        toast.error('Failed to clear chat history');
+      }
     }
   };
 
