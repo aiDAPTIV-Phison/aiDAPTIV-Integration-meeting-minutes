@@ -1331,12 +1331,15 @@ export default function Home() {
               }
 
               // If there is a markdown field, use it with priority
+              // Include all data fields including ttft_us and total_time_us (same as meeting-details)
               if (summaryData.markdown) {
-                setAiSummary({ markdown: summaryData.markdown } as any);
+                console.log('📝 Received markdown format from backend');
+                setAiSummary(summaryData as any);
               }
               // If there is a summary_json field (BlockNote format)
+              // Include all data fields including ttft_us and total_time_us
               else if (summaryData.summary_json) {
-                setAiSummary({ summary_json: summaryData.summary_json } as any);
+                setAiSummary(summaryData as any);
               }
               // Otherwise, assume it is legacy JSON format
               else {
@@ -1355,6 +1358,14 @@ export default function Home() {
                     }
                     return acc;
                   }, {} as Summary);
+
+                  // Preserve timing metrics in legacy format (if they exist in summaryData)
+                  if (summaryData.ttft_us !== undefined) {
+                    (formattedSummary as any).ttft_us = summaryData.ttft_us;
+                  }
+                  if (summaryData.total_time_us !== undefined) {
+                    (formattedSummary as any).total_time_us = summaryData.total_time_us;
+                  }
 
                   setAiSummary(formattedSummary);
                 } catch (error) {
