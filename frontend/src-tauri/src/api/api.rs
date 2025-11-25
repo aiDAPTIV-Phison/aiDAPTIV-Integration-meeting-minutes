@@ -10,6 +10,7 @@ use crate::{
         repositories::{
             meeting::MeetingsRepository, setting::SettingsRepository,
             transcript::TranscriptsRepository,
+            transcript_chunk::TranscriptChunksRepository,
         },
     },
     state::AppState,
@@ -1056,6 +1057,34 @@ pub async fn api_save_single_transcript<R: Runtime>(
         transcript_id,
         meeting_id
     );
+
+    // Update transcript_chunks with latest transcripts
+    // Retrieve all transcripts for this meeting and join as complete text
+    let all_transcripts: Vec<crate::database::models::Transcript> = sqlx::query_as(
+        r#"
+        SELECT * FROM transcripts 
+        WHERE meeting_id = ? 
+        ORDER BY COALESCE(audio_start_time, 0) ASC, id ASC
+        "#
+    )
+    .bind(&meeting_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    if !all_transcripts.is_empty() {
+        let full_transcript_text = all_transcripts
+            .iter()
+            .map(|t| t.transcript.as_str())
+            .collect::<Vec<&str>>()
+            .join("\n");
+
+        // Update transcript_chunks (will create if not exists, update if exists)
+        if let Err(e) = TranscriptChunksRepository::update_transcript_text_only(pool, &meeting_id, &full_transcript_text).await {
+            // Log error but don't fail the transcript save operation
+            log_error!("Failed to update transcript_chunks for meeting {}: {}", meeting_id, e);
+        }
+    }
 
     Ok(serde_json::json!({
         "status": "success",
