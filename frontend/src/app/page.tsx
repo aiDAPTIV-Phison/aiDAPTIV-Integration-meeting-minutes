@@ -147,7 +147,12 @@ export default function Home() {
     }
     return true;
   });
-  const [currentMeetingId, setCurrentMeetingId] = useState<string | null>(null);
+  const [currentMeetingId, setCurrentMeetingId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('currentMeetingId');
+    }
+    return null;
+  });
   const blockNoteSummaryRef = useRef<any>(null);
 
   // Auto Summary feature status
@@ -209,6 +214,17 @@ export default function Home() {
   useEffect(() => {
     currentMeetingIdRef.current = currentMeetingId;
     console.log('📍 currentMeetingIdRef updated:', currentMeetingId);
+  }, [currentMeetingId]);
+
+  // Persist currentMeetingId to sessionStorage for page navigation
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (currentMeetingId) {
+        sessionStorage.setItem('currentMeetingId', currentMeetingId);
+      } else {
+        sessionStorage.removeItem('currentMeetingId');
+      }
+    }
   }, [currentMeetingId]);
 
   // Smart auto-scroll: Track user scroll position
@@ -662,7 +678,12 @@ export default function Home() {
   // This fixes the issue where reloading during active recording causes state desync
   useEffect(() => {
     const syncFromBackend = async () => {
-      // Only sync if recording is active but we have no local transcripts
+      // Always show dual panel when recording is active (handles page navigation back to home)
+      if (recordingState.isRecording) {
+        setShowSummary(true);
+      }
+
+      // Only sync transcripts if recording is active but we have no local transcripts
       if (recordingState.isRecording && transcripts.length === 0) {
         try {
           console.log('[Reload Sync] Recording active after reload, syncing transcript history...');
