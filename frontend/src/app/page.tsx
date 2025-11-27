@@ -66,9 +66,11 @@ export default function Home() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'ollama',
-    model: 'llama3.2:latest',
-    whisperModel: 'large-v3'
+    provider: 'openai-compatible',
+    model: 'LocalModel',
+    whisperModel: 'large-v3',
+    apiKey: 'na',
+    openaiCompatibleEndpoint: 'http://localhost:13141/v1'
   });
   const [transcriptModelConfig, setTranscriptModelConfig] = useState<TranscriptModelProps>({
     provider: 'parakeet',
