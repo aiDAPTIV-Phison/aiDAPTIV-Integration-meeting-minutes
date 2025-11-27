@@ -11,11 +11,12 @@ interface UseModelConfigurationProps {
 export function useModelConfiguration({ serverAddress }: UseModelConfigurationProps) {
   // Note: No hardcoded defaults - DB is the source of truth
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'ollama',
-    model: '', // Empty until loaded from DB
+    provider: 'openai-compatible',
+    model: 'LocalModel',
     whisperModel: 'large-v3',
+    apiKey: 'local',
     ollamaEndpoint: null,
-    openaiCompatibleEndpoint: null
+    openaiCompatibleEndpoint: 'http://127.0.0.1:13141/v1'
   });
   const [isLoading, setIsLoading] = useState(true);
   const [, setError] = useState<string>('');

@@ -56,11 +56,12 @@ const Sidebar: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'ollama',
-    model: 'llama3.2:latest',
+    provider: 'openai-compatible',
+    model: 'LocalModel',
     whisperModel: 'large-v3',
-    apiKey: null,
-    ollamaEndpoint: null
+    apiKey: 'local',
+    ollamaEndpoint: null,
+    openaiCompatibleEndpoint: 'http://127.0.0.1:13141/v1'
   });
   const [transcriptModelConfig, setTranscriptModelConfig] = useState<TranscriptModelProps>({
     provider: 'localWhisper',

@@ -11,12 +11,12 @@ interface SummaryModelSettingsProps {
 
 export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsProps) {
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'ollama',
-    model: 'llama3.2:latest',
+    provider: 'openai-compatible',
+    model: 'LocalModel',
     whisperModel: 'large-v3',
-    apiKey: null,
+    apiKey: 'local',
     ollamaEndpoint: null,
-    openaiCompatibleEndpoint: null
+    openaiCompatibleEndpoint: 'http://127.0.0.1:13141/v1'
   });
 
   // Reusable fetch function

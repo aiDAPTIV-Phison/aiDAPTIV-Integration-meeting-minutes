@@ -70,7 +70,7 @@ export default function Home() {
     model: 'LocalModel',
     whisperModel: 'large-v3',
     apiKey: 'na',
-    openaiCompatibleEndpoint: 'http://localhost:13141/v1'
+    openaiCompatibleEndpoint: 'http://127.0.0.1:13141/v1'
   });
   const [transcriptModelConfig, setTranscriptModelConfig] = useState<TranscriptModelProps>({
     provider: 'parakeet',
