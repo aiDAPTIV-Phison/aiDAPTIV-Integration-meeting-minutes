@@ -19,6 +19,14 @@ import { Lock, Unlock, Eye, EyeOff, RefreshCw, CheckCircle2, XCircle, ChevronDow
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+export interface CompletionParams {
+  temperature?: number | null;
+  top_p?: number | null;
+  max_tokens?: number | null;
+  repeat_penalty?: number | null;
+  repeat_last_n?: number | null;
+}
+
 export interface ModelConfig {
   provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'openai-compatible';
   model: string;
@@ -77,7 +85,7 @@ export function ModelSettingsModal({
   const [autoGenerateEnabled, setAutoGenerateEnabled] = useState<boolean>(true); // Default to true
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isEndpointSectionCollapsed, setIsEndpointSectionCollapsed] = useState<boolean>(true); // Collapsed by default
-  
+
   // Auto summary interval state (in seconds), default 180s, minimum 60s
   const [autoSummaryInterval, setAutoSummaryInterval] = useState<number>(() => {
     if (typeof window !== 'undefined') {
@@ -88,6 +96,32 @@ export function ModelSettingsModal({
       }
     }
     return 180;
+  });
+
+  // Completion parameters state
+  const [completionParams, setCompletionParams] = useState<CompletionParams>(() => {
+    const defaults: CompletionParams = {
+      temperature: null,
+      top_p: null,
+      max_tokens: 2048,
+      repeat_penalty: 1.1,
+      repeat_last_n: 64,
+    };
+
+    // Try to load from localStorage first
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('completionParams');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return { ...defaults, ...parsed };
+        } catch (e) {
+          console.error('Failed to parse completionParams from localStorage:', e);
+        }
+      }
+    }
+
+    return defaults;
   });
 
   // Use global download context instead of local state
@@ -393,12 +427,12 @@ export function ModelSettingsModal({
       ...modelConfig,
       apiKey: typeof apiKey === 'string' ? apiKey.trim() || null : null,
     };
-    
+
     // Only update ollamaEndpoint if provider is ollama
     if (modelConfig.provider === 'ollama') {
       updatedConfig.ollamaEndpoint = ollamaEndpoint.trim() || null;
     }
-    
+
     // Only update openaiCompatibleEndpoint if provider is openai-compatible
     if (modelConfig.provider === 'openai-compatible') {
       updatedConfig.openaiCompatibleEndpoint = openaiCompatibleEndpoint.trim() || null;
@@ -419,6 +453,11 @@ export function ModelSettingsModal({
     localStorage.setItem('autoSummaryInterval', finalInterval.toString());
     if (finalInterval !== autoSummaryInterval) {
       setAutoSummaryInterval(finalInterval);  // Update UI if corrected
+    }
+
+    // Save completionParams to localStorage
+    if (modelConfig.provider === 'openai-compatible') {
+      localStorage.setItem('completionParams', JSON.stringify(completionParams));
     }
 
     onSave(updatedConfig);
@@ -908,6 +947,146 @@ export function ModelSettingsModal({
           />
         </div>
       </div> */}
+
+      {/* Completion Parameters - Only for OpenAI Compatible */}
+      {modelConfig.provider === 'openai-compatible' && (
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="mb-4">
+            <Label className="text-base font-medium">Completion Parameters</Label>
+            <p className="text-sm text-muted-foreground mt-1">
+              Configure LLM chat completion parameters for summary generation
+            </p>
+          </div>
+          <div className="space-y-3">
+            {/* Temperature */}
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <Label htmlFor="temperature" className="text-sm font-medium">
+                  temperature
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Controls randomness (leave empty for default)
+                </p>
+              </div>
+              <Input
+                id="temperature"
+                type="number"
+                step="0.1"
+                min="0"
+                max="2"
+                placeholder="None"
+                value={completionParams.temperature ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                  setCompletionParams(prev => ({ ...prev, temperature: val }));
+                }}
+                className="w-28 text-right"
+              />
+            </div>
+
+            {/* top_p */}
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <Label htmlFor="top_p" className="text-sm font-medium">
+                  top_p
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Nucleus sampling threshold (leave empty for default)
+                </p>
+              </div>
+              <Input
+                id="top_p"
+                type="number"
+                step="0.1"
+                min="0"
+                max="1"
+                placeholder="None"
+                value={completionParams.top_p ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                  setCompletionParams(prev => ({ ...prev, top_p: val }));
+                }}
+                className="w-28 text-right"
+              />
+            </div>
+
+            {/* max_tokens */}
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <Label htmlFor="max_tokens" className="text-sm font-medium">
+                  max_tokens
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Maximum tokens to generate
+                </p>
+              </div>
+              <Input
+                id="max_tokens"
+                type="number"
+                step="1"
+                min="1"
+                placeholder="2048"
+                value={completionParams.max_tokens ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                  setCompletionParams(prev => ({ ...prev, max_tokens: val }));
+                }}
+                className="w-28 text-right"
+              />
+            </div>
+
+            {/* repeat_penalty */}
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <Label htmlFor="repeat_penalty" className="text-sm font-medium">
+                  repeat_penalty
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Penalty for repetition (leave empty for default)
+                </p>
+              </div>
+              <Input
+                id="repeat_penalty"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="1.1"
+                value={completionParams.repeat_penalty ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                  setCompletionParams(prev => ({ ...prev, repeat_penalty: val }));
+                }}
+                className="w-28 text-right"
+              />
+            </div>
+
+            {/* repeat_last_n */}
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <Label htmlFor="repeat_last_n" className="text-sm font-medium">
+                  repeat_last_n
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Look-back tokens for repetition penalty
+                </p>
+              </div>
+              <Input
+                id="repeat_last_n"
+                type="number"
+                step="1"
+                min="0"
+                placeholder="64"
+                value={completionParams.repeat_last_n ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                  setCompletionParams(prev => ({ ...prev, repeat_last_n: val }));
+                }}
+                className="w-28 text-right"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Auto Summary Time Interval Setting */}
       <div className="mt-6 pt-6 border-t border-gray-200">

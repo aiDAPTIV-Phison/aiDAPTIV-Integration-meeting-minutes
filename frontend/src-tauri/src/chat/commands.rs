@@ -22,6 +22,9 @@ pub struct ChatRequest {
     pub endpoint: Option<String>,
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
+    pub top_p: Option<f32>,
+    pub repeat_penalty: Option<f32>,
+    pub repeat_last_n: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -156,8 +159,11 @@ pub async fn api_chat_send_message<R: Runtime>(
     let request_id = request.meeting_id.clone();
 
     // Set default parameters if not provided
-    let temperature = request.temperature.unwrap_or(0.7);
-    let max_tokens = request.max_tokens.unwrap_or(2048);
+    let temperature = request.temperature;
+    let top_p = request.top_p;
+    let max_tokens = request.max_tokens;
+    let repeat_penalty = request.repeat_penalty;
+    let repeat_last_n = request.repeat_last_n;
 
     // Create HTTP client
     let client = Client::new();
@@ -184,9 +190,11 @@ pub async fn api_chat_send_message<R: Runtime>(
             request_id.clone(),
             ollama_endpoint,
             openai_compatible_endpoint,
-            Some(temperature),
-            None, // top_p
-            Some(max_tokens),
+            temperature,
+            top_p,
+            max_tokens,
+            repeat_penalty,
+            repeat_last_n,
         )
         .await
         {

@@ -92,6 +92,33 @@ pub struct ChatRequest {
     pub messages: Vec<ChatMessage>,
 }
 
+// Completion parameters structure (shared between summary and chat)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletionParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repeat_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repeat_last_n: Option<i32>,
+}
+
+impl Default for CompletionParams {
+    fn default() -> Self {
+        Self {
+            temperature: None,
+            top_p: None,
+            max_tokens: Some(2048),
+            repeat_penalty: Some(1.1),
+            repeat_last_n: Some(64),
+        }
+    }
+}
+
 // Generic structure for OpenAI-compatible API chat requests (with streaming option)
 #[derive(Debug, Serialize)]
 pub struct StreamingChatRequest {
@@ -104,6 +131,10 @@ pub struct StreamingChatRequest {
     pub top_p: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repeat_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repeat_last_n: Option<i32>,
 }
 
 // Generic structure for OpenAI-compatible API chat responses
@@ -305,6 +336,7 @@ pub struct SummaryResult {
 /// * `ollama_endpoint` - Optional custom Ollama endpoint (defaults to localhost:11434)
 /// * `openai_compatible_endpoint` - Optional custom OpenAI-compatible endpoint
 /// * `stream` - Whether to use streaming mode (enables TTFT tracking)
+/// * `completion_params` - Optional completion parameters (temperature, max_tokens, etc.)
 ///
 /// # Returns
 /// SummaryResult with content, ttft_us (if stream=true), and total_time_us
@@ -318,6 +350,7 @@ pub async fn generate_summary(
     ollama_endpoint: Option<&str>,
     openai_compatible_endpoint: Option<&str>,
     stream: bool,
+    completion_params: Option<CompletionParams>,
 ) -> Result<SummaryResult, String> {
     use std::time::Instant;
 
@@ -332,6 +365,7 @@ pub async fn generate_summary(
             user_prompt,
             ollama_endpoint,
             openai_compatible_endpoint,
+            completion_params,
         )
         .await
     } else {
@@ -344,6 +378,7 @@ pub async fn generate_summary(
             user_prompt,
             ollama_endpoint,
             openai_compatible_endpoint,
+            completion_params,
         )
         .await
     }
@@ -359,6 +394,7 @@ async fn _generate_summary_non_streaming(
     user_prompt: &str,
     ollama_endpoint: Option<&str>,
     openai_compatible_endpoint: Option<&str>,
+    completion_params: Option<CompletionParams>,
 ) -> Result<SummaryResult, String> {
     use std::time::Instant;
     let request_start_time = Instant::now();
@@ -543,6 +579,7 @@ async fn generate_summary_streaming(
     user_prompt: &str,
     ollama_endpoint: Option<&str>,
     openai_compatible_endpoint: Option<&str>,
+    completion_params: Option<CompletionParams>,
 ) -> Result<SummaryResult, String> {
     use std::time::Instant;
 
@@ -554,6 +591,7 @@ async fn generate_summary_streaming(
             api_key,
             system_prompt,
             user_prompt,
+            completion_params,
         )
         .await
     } else {
@@ -566,6 +604,7 @@ async fn generate_summary_streaming(
             user_prompt,
             ollama_endpoint,
             openai_compatible_endpoint,
+            completion_params,
         )
         .await
     }
@@ -581,6 +620,7 @@ async fn _generate_summary_streaming(
     user_prompt: &str,
     ollama_endpoint: Option<&str>,
     openai_compatible_endpoint: Option<&str>,
+    completion_params: Option<CompletionParams>,
 ) -> Result<SummaryResult, String> {
     use std::time::Instant;
     let request_start_time = Instant::now();
@@ -650,13 +690,18 @@ async fn _generate_summary_streaming(
 
     info!("🐞 Full messages: {}", serde_json::to_string_pretty(&messages).unwrap_or_default());
 
+    // Use provided completion params or defaults
+    let params = completion_params.unwrap_or_default();
+
     let request_body = StreamingChatRequest {
         model: model_name.to_string(),
         messages,
         stream: true,
-        temperature: None,
-        top_p: None,
-        max_tokens: Some(2048),
+        temperature: params.temperature,
+        top_p: params.top_p,
+        max_tokens: params.max_tokens,
+        repeat_penalty: params.repeat_penalty,
+        repeat_last_n: params.repeat_last_n,
     };
 
     info!("🚀 Sending streaming summary request to {}: {}", provider_name(provider), api_url);
@@ -766,6 +811,7 @@ async fn _generate_summary_streaming_claude(
     api_key: &str,
     system_prompt: &str,
     user_prompt: &str,
+    completion_params: Option<CompletionParams>,
 ) -> Result<SummaryResult, String> {
     use std::time::Instant;
     let request_start_time = Instant::now();
@@ -951,6 +997,8 @@ pub async fn stream_chat<R: Runtime>(
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
+    repeat_penalty: Option<f32>,
+    repeat_last_n: Option<i32>,
 ) -> Result<(), String> {
     info!(
         "🌊 Starting streaming chat for request_id: {} with provider: {:?}, model: {}",
@@ -969,6 +1017,8 @@ pub async fn stream_chat<R: Runtime>(
                 temperature,
                 top_p,
                 max_tokens,
+                repeat_penalty,
+                repeat_last_n,
             )
             .await
         }
@@ -987,6 +1037,8 @@ pub async fn stream_chat<R: Runtime>(
                 temperature,
                 top_p,
                 max_tokens,
+                repeat_penalty,
+                repeat_last_n,
             )
             .await
         }
@@ -1026,6 +1078,8 @@ async fn stream_chat_openai_compatible<R: Runtime>(
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
+    repeat_penalty: Option<f32>,
+    repeat_last_n: Option<i32>,
 ) -> Result<(), String> {
     // Determine API endpoint
     let (api_url, mut headers) = match provider {
@@ -1088,6 +1142,8 @@ async fn stream_chat_openai_compatible<R: Runtime>(
         temperature,
         top_p,
         max_tokens,
+        repeat_penalty,
+        repeat_last_n,
     };
 
     info!("🚀 Sending streaming request to {}: {}", provider_name(provider), api_url);
@@ -1226,6 +1282,8 @@ async fn stream_chat_claude<R: Runtime>(
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
+    _repeat_penalty: Option<f32>,
+    _repeat_last_n: Option<i32>,
 ) -> Result<(), String> {
     // Separate system message from user messages
     let system_prompt = messages

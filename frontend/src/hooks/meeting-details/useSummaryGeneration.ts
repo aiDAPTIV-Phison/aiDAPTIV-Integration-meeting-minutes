@@ -109,6 +109,18 @@ export function useSummaryGeneration({
         await Analytics.trackCustomPromptUsed(customPrompt.trim().length);
       }
 
+      // Load completion params from localStorage
+      const completionParams = typeof window !== 'undefined'
+        ? (() => {
+            try {
+              const saved = localStorage.getItem('completionParams');
+              return saved ? JSON.parse(saved) : null;
+            } catch {
+              return null;
+            }
+          })()
+        : null;
+
       // Process transcript and get process_id
       const result = await invokeTauri('api_process_transcript', {
         text: transcriptText,
@@ -120,6 +132,7 @@ export function useSummaryGeneration({
         customPrompt: customPrompt,
         templateId: currentTemplate,
         languageId: currentLanguage,
+        completionParams: completionParams,
       }) as any;
 
       const process_id = result.process_id;

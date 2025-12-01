@@ -214,9 +214,14 @@ export function ChatPanel({
             const newMessages = [...prev];
             if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'assistant') {
               // Update with TTFT if available and use streamingContentRef for complete content
+              // If content is empty, use placeholder
+              const finalContent = streamingContentRef.current.trim()
+                ? streamingContentRef.current
+                : '<empty content>';
+
               const lastMessage: Message = {
                 ...newMessages[newMessages.length - 1],
-                content: streamingContentRef.current // Use ref to ensure complete content
+                content: finalContent
               };
               if (ttft_us !== undefined) {
                 lastMessage.ttft_us = ttft_us;
@@ -228,22 +233,25 @@ export function ChatPanel({
 
           // Save assistant message to database (await to ensure consistency with summary pattern)
           // Always use streamingContentRef.current as it's the source of truth for complete content
-          if (streamingContentRef.current.length > 0) {
-            try {
-              await invoke('api_chat_save_message', {
-                meetingId: meeting.id,
-                role: 'assistant',
-                content: streamingContentRef.current,
-                ttftUs: ttft_us ?? null
-              });
-              console.log('Assistant message saved to database');
-            } catch (error) {
-              console.error('Failed to save assistant message:', error);
-              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-              toast.error('Failed to save assistant message', {
-                description: errorMessage
-              });
-            }
+          // If content is empty, use placeholder to indicate empty response
+          const contentToSave = streamingContentRef.current.trim()
+            ? streamingContentRef.current
+            : '<empty content>';
+
+          try {
+            await invoke('api_chat_save_message', {
+              meetingId: meeting.id,
+              role: 'assistant',
+              content: contentToSave,
+              ttftUs: ttft_us ?? null
+            });
+            console.log('Assistant message saved to database (content length:', streamingContentRef.current.length, ')');
+          } catch (error) {
+            console.error('Failed to save assistant message:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            toast.error('Failed to save assistant message', {
+              description: errorMessage
+            });
           }
 
           setIsLoading(false);
@@ -381,6 +389,16 @@ export function ChatPanel({
         endpoint = modelConfig.openaiCompatibleEndpoint || undefined;
       }
 
+      // Load completion params from localStorage
+      const completionParams = (() => {
+        try {
+          const saved = localStorage.getItem('completionParams');
+          return saved ? JSON.parse(saved) : {};
+        } catch {
+          return {};
+        }
+      })();
+
       // Send chat request with new API format
       // Backend will build system prompt from meeting context
       await invoke('api_chat_send_message', {
@@ -392,8 +410,11 @@ export function ChatPanel({
           model: modelConfig.model,
           api_key: apiKey,
           endpoint: endpoint,
-          temperature: 0.7,
-          max_tokens: 2048
+          temperature: completionParams.temperature ?? 0.7,
+          max_tokens: completionParams.max_tokens ?? 2048,
+          top_p: completionParams.top_p,
+          repeat_penalty: completionParams.repeat_penalty,
+          repeat_last_n: completionParams.repeat_last_n,
         }
       });
 
@@ -768,8 +789,12 @@ export function ChatPanel({
                   }`}
                 >
                   <div className="text-sm whitespace-pre-wrap">
-                    {message.content || (
+                    {isLoading && !message.content ? (
                       <span className="text-gray-400 italic">Waiting for response...</span>
+                    ) : message.content === '<empty content>' ? (
+                      <span className="text-gray-400 italic">&lt;empty content&gt;</span>
+                    ) : (
+                      message.content
                     )}
                   </div>
                   <div className={`text-xs mt-1 flex items-center gap-2 ${

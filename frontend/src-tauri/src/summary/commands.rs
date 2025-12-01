@@ -180,6 +180,7 @@ pub async fn api_process_transcript<R: Runtime>(
     template_id: Option<String>,
     language_id: Option<String>,
     _auth_token: Option<String>,
+    completion_params: Option<crate::summary::llm_client::CompletionParams>,
 ) -> Result<ProcessTranscriptResponse, String> {
     use uuid::Uuid;
 
@@ -234,6 +235,7 @@ pub async fn api_process_transcript<R: Runtime>(
             final_prompt,
             final_template_id,
             final_language_id,
+            completion_params,
         )
         .await;
     });

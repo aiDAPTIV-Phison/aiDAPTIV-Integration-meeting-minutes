@@ -1,7 +1,7 @@
 use crate::database::repositories::{
     meeting::MeetingsRepository, setting::SettingsRepository, summary::SummaryProcessesRepository,
 };
-use crate::summary::llm_client::LLMProvider;
+use crate::summary::llm_client::{CompletionParams, LLMProvider};
 use crate::summary::processor::{extract_meeting_name_from_markdown, generate_meeting_summary};
 use crate::ollama::metadata::ModelMetadataCache;
 use sqlx::SqlitePool;
@@ -44,6 +44,7 @@ impl SummaryService {
         custom_prompt: String,
         template_id: String,
         language_id: String,
+        completion_params: Option<CompletionParams>,
     ) {
         let start_time = Instant::now();
         info!(
@@ -168,7 +169,7 @@ impl SummaryService {
         if let Some(ref ep) = openai_compatible_endpoint {
             info!("  → OpenAI Compatible endpoint: {}", ep);
         }
-        
+
         let client = reqwest::Client::new();
         let result = generate_meeting_summary(
             &client,
@@ -182,6 +183,7 @@ impl SummaryService {
             token_threshold,
             ollama_endpoint.as_deref(),
             openai_compatible_endpoint.as_deref(),
+            completion_params,
         )
         .await;
 

@@ -1428,6 +1428,18 @@ export default function Home() {
       console.log('Processing transcript...');
       const meetingIdForSummary = currentMeetingIdRef.current;
       console.log('📍 Using meeting ID for summary:', meetingIdForSummary);
+      // Load completion params from localStorage
+      const completionParams = typeof window !== 'undefined'
+        ? (() => {
+            try {
+              const saved = localStorage.getItem('completionParams');
+              return saved ? JSON.parse(saved) : null;
+            } catch {
+              return null;
+            }
+          })()
+        : null;
+
       const result = await invoke('api_process_transcript', {
         text: fullTranscript,
         model: modelConfig.provider,
@@ -1437,6 +1449,7 @@ export default function Home() {
         overlap: 1000,
         customPrompt: prompt,
         templateId: templates.selectedTemplate,
+        completionParams: completionParams,
       }) as any;
 
       const process_id = result.process_id;
@@ -1720,12 +1733,25 @@ export default function Home() {
 
       // Process transcript and get process_id
       console.log('Processing transcript...');
+      // Load completion params from localStorage
+      const completionParams = typeof window !== 'undefined'
+        ? (() => {
+            try {
+              const saved = localStorage.getItem('completionParams');
+              return saved ? JSON.parse(saved) : null;
+            } catch {
+              return null;
+            }
+          })()
+        : null;
+
       const result = await invoke('api_process_transcript', {
         text: originalTranscript,
         model: modelConfig.provider,
         modelName: modelConfig.model,
         chunkSize: 40000,
         overlap: 1000,
+        completionParams: completionParams,
       }) as any;
 
       const process_id = result.process_id;

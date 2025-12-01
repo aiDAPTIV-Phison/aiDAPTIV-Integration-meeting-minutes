@@ -1,4 +1,4 @@
-use crate::summary::llm_client::{generate_summary, LLMProvider};
+use crate::summary::llm_client::{generate_summary, CompletionParams, LLMProvider};
 use crate::summary::templates;
 use regex::Regex;
 use reqwest::Client;
@@ -144,6 +144,7 @@ pub async fn generate_meeting_summary(
     token_threshold: usize,
     ollama_endpoint: Option<&str>,
     openai_compatible_endpoint: Option<&str>,
+    completion_params: Option<CompletionParams>,
 ) -> Result<(String, i64, Option<u64>, u64), String> {
     info!(
         "Starting summary generation with provider: {:?}, model: {}",
@@ -195,6 +196,7 @@ pub async fn generate_meeting_summary(
                 ollama_endpoint,
                 openai_compatible_endpoint,
                 false, // Chunk summaries don't need TTFT tracking
+                completion_params.clone(),
             )
             .await
             {
@@ -248,6 +250,7 @@ pub async fn generate_meeting_summary(
                 ollama_endpoint,
                 openai_compatible_endpoint,
                 false, // Combining chunks doesn't need TTFT tracking
+                completion_params.clone(),
             )
             .await?;
             result.content
@@ -323,6 +326,7 @@ You are an expert meeting summarizer. Generate a final meeting report by filling
         ollama_endpoint,
         openai_compatible_endpoint,
         true, // Final summary generation: enable streaming for TTFT tracking
+        completion_params,
     )
     .await?;
 
