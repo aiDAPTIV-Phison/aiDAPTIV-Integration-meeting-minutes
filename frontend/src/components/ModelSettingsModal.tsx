@@ -1102,6 +1102,9 @@ export function ModelSettingsModal({
                     <p className="text-xs text-muted-foreground">
                       Reasoning depth for model inference
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      (Only applies to gpt-oss-20/120b series models)
+                    </p>
                   </div>
                   <Select
                     value={completionParams.chat_template_kwargs?.reasoning_effort ?? "low"}
