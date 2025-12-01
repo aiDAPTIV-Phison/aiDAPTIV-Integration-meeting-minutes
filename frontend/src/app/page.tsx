@@ -28,7 +28,7 @@ import Analytics from '@/lib/analytics';
 import { showRecordingNotification } from '@/lib/recordingNotification';
 import { Button } from '@/components/ui/button';
 import { Copy, GlobeIcon, Settings, Upload } from 'lucide-react';
-import { loadCompletionParams } from '@/utils/completionParams';
+import { loadCompletionParams, DEFAULT_COMPLETION_PARAMS } from '@/utils/completionParams';
 import { MicrophoneIcon } from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
 import { ButtonGroup } from '@/components/ui/button-group';
@@ -1433,6 +1433,16 @@ export default function Home() {
       const completionParams = typeof window !== 'undefined'
         ? await loadCompletionParams()
         : null;
+
+      // Validate max_tokens for summary generation
+      const maxTokens = completionParams?.max_tokens ?? DEFAULT_COMPLETION_PARAMS.max_tokens ?? 2048;
+      if (maxTokens < 100) {
+        const errorMessage = 'Summary generation requires max_tokens to be at least 100';
+        setSummaryError(errorMessage);
+        setSummaryStatus('error');
+        toast.error(errorMessage);
+        return;
+      }
 
       const result = await invoke('api_process_transcript', {
         text: fullTranscript,

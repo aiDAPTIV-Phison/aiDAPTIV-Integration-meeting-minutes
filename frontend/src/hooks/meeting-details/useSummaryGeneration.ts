@@ -5,7 +5,7 @@ import { CurrentMeeting, useSidebar } from '@/components/Sidebar/SidebarProvider
 import { invoke as invokeTauri } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
-import { loadCompletionParams } from '@/utils/completionParams';
+import { loadCompletionParams, DEFAULT_COMPLETION_PARAMS } from '@/utils/completionParams';
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
 
@@ -114,6 +114,23 @@ export function useSummaryGeneration({
       const completionParams = typeof window !== 'undefined'
         ? await loadCompletionParams()
         : null;
+
+      // Validate max_tokens for summary generation
+      const maxTokens = completionParams?.max_tokens ?? DEFAULT_COMPLETION_PARAMS.max_tokens ?? 2048;
+      if (maxTokens < 100) {
+        const errorMessage = 'Summary generation requires max_tokens to be at least 100';
+        setSummaryError(errorMessage);
+        setSummaryStatus('error');
+        toast.error(errorMessage);
+        await Analytics.trackSummaryGenerationCompleted(
+          modelConfig.provider,
+          modelConfig.model,
+          false,
+          undefined,
+          errorMessage
+        );
+        return;
+      }
 
       // Process transcript and get process_id
       const result = await invokeTauri('api_process_transcript', {
