@@ -28,7 +28,7 @@ pub async fn get_transcript_chunk_for_chat(
     provider: &LLMProvider,
     model_name: &str,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    _openai_compatible_endpoint: Option<&str>,
 ) -> String {
     // Calculate token threshold - same logic as summary/processor
     // Only Ollama uses endpoint for metadata lookup, but we accept openai_compatible_endpoint
@@ -117,7 +117,7 @@ pub async fn build_chat_system_prompt(
     provider: &LLMProvider,
     model_name: &str,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    _openai_compatible_endpoint: Option<&str>,
 ) -> Result<String, String> {
     info!("Building chat system prompt for meeting: {}", meeting.id);
 
