@@ -107,6 +107,42 @@ export function ModelSettingsModal({
   // Completion parameters state - load from database on mount
   const [completionParams, setCompletionParams] = useState<CompletionParams>(DEFAULT_COMPLETION_PARAMS);
 
+  // Validation functions for completion params
+  const validateTemperature = (val: number | null): number | null => {
+    if (val === null || isNaN(val)) return null;
+    if (val < 0) return 0;
+    if (val > 2) return 2;
+    return val;
+  };
+
+  const validateTopP = (val: number | null): number | null => {
+    if (val === null || isNaN(val)) return null;
+    if (val <= 0) return 0.01; // Strictly greater than 0
+    if (val > 1) return 1;
+    return val;
+  };
+
+  const validateMaxTokens = (val: number | null): number | null => {
+    if (val === null || isNaN(val)) return null;
+    const intVal = Math.floor(val); // Convert to integer
+    if (intVal <= 0) return null; // Must be > 0
+    return intVal;
+  };
+
+  const validateRepeatPenalty = (val: number | null): number | null => {
+    if (val === null || isNaN(val)) return null;
+    if (val < 0) return 0;
+    if (val > 2) return 2;
+    return val;
+  };
+
+  const validateRepeatLastN = (val: number | null): number | null => {
+    if (val === null || isNaN(val)) return null;
+    if (val < 0) return 0;
+    if (val > 512) return 512;
+    return Math.floor(val); // Ensure integer
+  };
+
   // Load completion params from database on mount
   useEffect(() => {
     const loadParams = async () => {
@@ -974,10 +1010,11 @@ export function ModelSettingsModal({
                 step="0.1"
                 min="0"
                 max="2"
-                placeholder="None"
+                placeholder="0.0"
                 value={completionParams.temperature ?? ''}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                  const rawVal = e.target.value === '' ? null : parseFloat(e.target.value);
+                  const val = validateTemperature(rawVal);
                   setCompletionParams(prev => ({ ...prev, temperature: val }));
                 }}
                 className="w-28 text-right"
@@ -997,13 +1034,14 @@ export function ModelSettingsModal({
               <Input
                 id="top_p"
                 type="number"
-                step="0.1"
-                min="0"
+                step="0.01"
+                min="0.01"
                 max="1"
-                placeholder="None"
+                placeholder="0.95"
                 value={completionParams.top_p ?? ''}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                  const rawVal = e.target.value === '' ? null : parseFloat(e.target.value);
+                  const val = validateTopP(rawVal);
                   setCompletionParams(prev => ({ ...prev, top_p: val }));
                 }}
                 className="w-28 text-right"
@@ -1028,7 +1066,8 @@ export function ModelSettingsModal({
                 placeholder="2048"
                 value={completionParams.max_tokens ?? ''}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                  const rawVal = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                  const val = validateMaxTokens(rawVal);
                   setCompletionParams(prev => ({ ...prev, max_tokens: val }));
                 }}
                 className="w-28 text-right"
@@ -1050,10 +1089,12 @@ export function ModelSettingsModal({
                 type="number"
                 step="0.1"
                 min="0"
+                max="2"
                 placeholder="1.1"
                 value={completionParams.repeat_penalty ?? ''}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                  const rawVal = e.target.value === '' ? null : parseFloat(e.target.value);
+                  const val = validateRepeatPenalty(rawVal);
                   setCompletionParams(prev => ({ ...prev, repeat_penalty: val }));
                 }}
                 className="w-28 text-right"
@@ -1075,10 +1116,12 @@ export function ModelSettingsModal({
                 type="number"
                 step="1"
                 min="0"
+                max="512"
                 placeholder="64"
                 value={completionParams.repeat_last_n ?? ''}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                  const rawVal = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                  const val = validateRepeatLastN(rawVal);
                   setCompletionParams(prev => ({ ...prev, repeat_last_n: val }));
                 }}
                 className="w-28 text-right"
