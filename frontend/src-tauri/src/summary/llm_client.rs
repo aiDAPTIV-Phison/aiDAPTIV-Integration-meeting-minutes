@@ -119,8 +119,8 @@ pub struct CompletionParams {
 impl Default for CompletionParams {
     fn default() -> Self {
         Self {
-            temperature: None,
-            top_p: None,
+            temperature: Some(0.0),
+            top_p: Some(0.95),
             max_tokens: Some(2048),
             repeat_penalty: Some(1.1),
             repeat_last_n: Some(64),

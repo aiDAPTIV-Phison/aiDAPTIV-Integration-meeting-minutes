@@ -4,8 +4,8 @@ import { CompletionParams } from '@/components/ModelSettingsModal';
  * Default completion parameters
  */
 export const DEFAULT_COMPLETION_PARAMS: CompletionParams = {
-  temperature: null,
-  top_p: null,
+  temperature: 0.0,
+  top_p: 0.95,
   max_tokens: 2048,
   repeat_penalty: 1.1,
   repeat_last_n: 64,
