@@ -148,7 +148,8 @@ export function useSummaryGeneration({
           // Check if backend returned markdown format (new flow)
           if (pollingResult.data.markdown) {
             console.log('📝 Received markdown format from backend');
-            setAiSummary({ markdown: pollingResult.data.markdown } as any);
+            // Include all data fields including ttft_us and total_time_us
+            setAiSummary(pollingResult.data as any);
             setSummaryStatus('completed');
 
             if (meetingName && onMeetingUpdated) {

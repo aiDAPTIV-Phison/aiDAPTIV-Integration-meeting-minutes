@@ -9,6 +9,7 @@ import { SummaryGeneratorButtonGroup } from './SummaryGeneratorButtonGroup';
 import { SummaryUpdaterButtonGroup } from './SummaryUpdaterButtonGroup';
 import Analytics from '@/lib/analytics';
 import { RefObject } from 'react';
+import { PerformanceMetrics } from '@/components/PerformanceMetrics';
 
 interface SummaryPanelProps {
   meeting: {
@@ -86,7 +87,7 @@ export function SummaryPanel({
   return (
     <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden">
       {/* Title area */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="relative p-4 border-b border-gray-200">
         {/* <EditableTitle
           title={meetingTitle}
           isEditing={isEditingTitle}
@@ -230,6 +231,16 @@ export function SummaryPanel({
                   <p className="text-sm whitespace-pre-wrap">{summaryResponse.raw_summary}</p>
                 </div>
               ) : null}
+            </div>
+          )}
+          {/* Timing Metrics Display - positioned above Summary content block */}
+          {aiSummary && !isSummaryLoading && (
+            <div className="px-6 pt-6 pb-3 flex items-center justify-end">
+              <PerformanceMetrics
+                ttft={(aiSummary as any)?.ttft_us}
+                totalTime={(aiSummary as any)?.total_time_us}
+                variant="default"
+              />
             </div>
           )}
           <div className="p-6 w-full">
