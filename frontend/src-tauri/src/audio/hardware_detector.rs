@@ -82,6 +82,13 @@ impl HardwareProfile {
 
     /// Detect GPU acceleration capabilities
     fn detect_gpu() -> (bool, GpuType) {
+
+        // check vulkan support in vulkan feature first
+        #[cfg(feature = "vulkan")]
+        if Self::has_vulkan_support() {
+            return (true, GpuType::Vulkan);
+        }
+
         // Check for Metal (Apple Silicon)
         #[cfg(target_os = "macos")]
         {
@@ -164,8 +171,12 @@ impl HardwareProfile {
     }
 
     fn has_vulkan_support() -> bool {
-        // Basic Vulkan detection - could be enhanced
+        // Basic Vulkan detection
+        // Check for VULKAN_SDK environment variable (full SDK installation)
         std::env::var("VULKAN_SDK").is_ok() ||
+        // Windows: Check for Vulkan runtime DLL in System32 (installed via Vulkan Runtime)
+        std::path::Path::new("C:\\Windows\\System32\\vulkan-1.dll").exists() ||
+        // Linux: Check for Vulkan shared library paths
         std::path::Path::new("/usr/lib/x86_64-linux-gnu/libvulkan.so").exists() ||
         std::path::Path::new("/usr/lib/libvulkan.so").exists()
     }
