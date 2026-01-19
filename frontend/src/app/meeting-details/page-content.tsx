@@ -143,8 +143,10 @@ export default function PageContent({
           availableTemplates={templates.availableTemplates}
           selectedTemplate={templates.selectedTemplate}
           selectedLanguage={templates.selectedLanguage}
+          rememberPreference={templates.rememberPreference}
           onTemplateSelect={templates.handleTemplateSelection}
           onLanguageSelect={templates.handleLanguageSelection}
+          onRememberPreferenceToggle={templates.handleRememberPreferenceToggle}
           isModelConfigLoading={modelConfig.isLoading}
         />
 
