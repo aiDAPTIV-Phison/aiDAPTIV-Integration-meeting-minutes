@@ -64,8 +64,10 @@ interface ChatPanelProps {
     availableTemplates: Array<{id: string, name: string, description: string}>;
     selectedTemplate: string;
     selectedLanguage: string;
+    rememberPreference: boolean;
     onTemplateSelect: (templateId: string, templateName: string) => void;
     onLanguageSelect: (languageCode: string) => void;
+    onRememberPreferenceToggle: (remember: boolean) => void;
   };
 }
 
@@ -512,8 +514,10 @@ export function ChatPanel({
                         availableTemplates={summaryPanelProps.availableTemplates}
                         selectedTemplate={summaryPanelProps.selectedTemplate}
                         selectedLanguage={summaryPanelProps.selectedLanguage}
+                        rememberPreference={summaryPanelProps.rememberPreference}
                         onTemplateSelect={summaryPanelProps.onTemplateSelect}
                         onLanguageSelect={summaryPanelProps.onLanguageSelect}
+                        onRememberPreferenceToggle={summaryPanelProps.onRememberPreferenceToggle}
                         hasTranscripts={summaryPanelProps.transcripts.length > 0}
                         isModelConfigLoading={isModelConfigLoading}
                         // onChatClick={() => {

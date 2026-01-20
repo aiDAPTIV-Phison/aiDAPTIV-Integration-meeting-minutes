@@ -33,8 +33,10 @@ interface SummaryGeneratorButtonGroupProps {
   availableTemplates: Array<{id: string, name: string, description: string}>;
   selectedTemplate: string;
   selectedLanguage: string;
+  rememberPreference: boolean;
   onTemplateSelect: (templateId: string, templateName: string) => void;
   onLanguageSelect: (languageCode: string) => void;
+  onRememberPreferenceToggle: (remember: boolean) => void;
   hasTranscripts?: boolean;
   isModelConfigLoading?: boolean;
   onChatClick?: () => void;
@@ -50,8 +52,10 @@ export function SummaryGeneratorButtonGroup({
   availableTemplates,
   selectedTemplate,
   selectedLanguage,
+  rememberPreference,
   onTemplateSelect,
   onLanguageSelect,
+  onRememberPreferenceToggle,
   hasTranscripts = true,
   isModelConfigLoading = false,
   onChatClick
@@ -205,6 +209,8 @@ export function SummaryGeneratorButtonGroup({
             onLanguageSelect={(languageCode) => {
               onLanguageSelect(languageCode);
             }}
+            rememberPreference={rememberPreference}
+            onRememberPreferenceToggle={onRememberPreferenceToggle}
           />
         </>
       )}

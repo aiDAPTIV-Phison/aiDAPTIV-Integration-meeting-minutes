@@ -49,8 +49,10 @@ interface SummaryPanelProps {
   availableTemplates: Array<{id: string, name: string, description: string}>;
   selectedTemplate: string;
   selectedLanguage: string;
+  rememberPreference: boolean;
   onTemplateSelect: (templateId: string, templateName: string) => void;
   onLanguageSelect: (languageCode: string) => void;
+  onRememberPreferenceToggle: (remember: boolean) => void;
   isModelConfigLoading?: boolean;
 }
 
@@ -103,8 +105,10 @@ export function SummaryPanel({
   availableTemplates,
   selectedTemplate,
   selectedLanguage,
+  rememberPreference,
   onTemplateSelect,
   onLanguageSelect,
+  onRememberPreferenceToggle,
   isModelConfigLoading = false
 }: SummaryPanelProps) {
   const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
@@ -162,8 +166,10 @@ export function SummaryPanel({
               availableTemplates,
               selectedTemplate,
               selectedLanguage,
+              rememberPreference,
               onTemplateSelect,
               onLanguageSelect,
+              onRememberPreferenceToggle,
             }}
           />
         </div>
@@ -198,8 +204,10 @@ export function SummaryPanel({
                 availableTemplates={availableTemplates}
                 selectedTemplate={selectedTemplate}
                 selectedLanguage={selectedLanguage}
+                rememberPreference={rememberPreference}
                 onTemplateSelect={onTemplateSelect}
                 onLanguageSelect={onLanguageSelect}
+                onRememberPreferenceToggle={onRememberPreferenceToggle}
                 hasTranscripts={transcripts.length > 0}
                 isModelConfigLoading={isModelConfigLoading}
                 onChatClick={() => setShowChat(true)}
@@ -239,8 +247,10 @@ export function SummaryPanel({
               availableTemplates={availableTemplates}
               selectedTemplate={selectedTemplate}
               selectedLanguage={selectedLanguage}
+              rememberPreference={rememberPreference}
               onTemplateSelect={onTemplateSelect}
               onLanguageSelect={onLanguageSelect}
+              onRememberPreferenceToggle={onRememberPreferenceToggle}
               hasTranscripts={transcripts.length > 0}
               isModelConfigLoading={isModelConfigLoading}
               onChatClick={() => setShowChat(true)}
@@ -268,8 +278,10 @@ export function SummaryPanel({
               availableTemplates={availableTemplates}
               selectedTemplate={selectedTemplate}
               selectedLanguage={selectedLanguage}
+              rememberPreference={rememberPreference}
               onTemplateSelect={onTemplateSelect}
               onLanguageSelect={onLanguageSelect}
+              onRememberPreferenceToggle={onRememberPreferenceToggle}
               hasTranscripts={transcripts.length > 0}
               isModelConfigLoading={isModelConfigLoading}
               onChatClick={() => setShowChat(true)}

@@ -29,6 +29,8 @@ interface TemplateLanguageSelectorProps {
   languages?: Language[];
   selectedLanguage?: string;
   onLanguageSelect?: (languageCode: string) => void;
+  rememberPreference?: boolean;
+  onRememberPreferenceToggle?: (remember: boolean) => void;
 }
 
 const DEFAULT_LANGUAGES: Language[] = [
@@ -48,8 +50,11 @@ export function TemplateLanguageSelector({
   languages = DEFAULT_LANGUAGES,
   selectedLanguage = 'en',
   onLanguageSelect,
+  rememberPreference = true,
+  onRememberPreferenceToggle,
 }: TemplateLanguageSelectorProps) {
   const [localSelectedLanguage, setLocalSelectedLanguage] = useState(selectedLanguage);
+  const [localRememberPreference, setLocalRememberPreference] = useState(rememberPreference);
 
   const handleLanguageSelect = (languageCode: string) => {
     setLocalSelectedLanguage(languageCode);
@@ -60,6 +65,12 @@ export function TemplateLanguageSelector({
     onTemplateSelect(templateId, templateName);
     // Optionally close dialog after selection
     // onOpenChange(false);
+  };
+
+  const handleRememberToggle = () => {
+    const newValue = !localRememberPreference;
+    setLocalRememberPreference(newValue);
+    onRememberPreferenceToggle?.(newValue);
   };
 
   return (
@@ -130,20 +141,34 @@ export function TemplateLanguageSelector({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex justify-end gap-2 p-4 border-t border-gray-200">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              onOpenChange(false);
-            }}
-          >
-            Confirm
-          </Button>
+        <div className="flex items-center justify-between p-4 border-t border-gray-200">
+          {/* Remember Preference Checkbox */}
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={localRememberPreference}
+              onChange={handleRememberToggle}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>Remember my choices for all meetings</span>
+          </label>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                onOpenChange(false);
+              }}
+            >
+              Confirm
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
