@@ -69,11 +69,11 @@ pub async fn api_chat_send_message<R: Runtime>(
         "groq" => LLMProvider::Groq,
         "ollama" => LLMProvider::Ollama,
         "openrouter" => LLMProvider::OpenRouter,
-        "openai-compatible" => LLMProvider::OpenAICompatible,
+        "llamacpp" | "openai-compatible" => LLMProvider::LlamaCpp,
         _ => return Err(format!("Unsupported provider: {}", request.provider)),
     };
 
-    // Get endpoint (for Ollama and OpenAI-compatible)
+    // Get endpoint (for Ollama and Llama.cpp)
     let endpoint = request.endpoint.clone();
 
     // Get transcript text - prefer transcript_chunks for KV cache compatibility with summary
@@ -105,17 +105,17 @@ pub async fn api_chat_send_message<R: Runtime>(
         }
     };
 
-    // Get endpoint (for Ollama and OpenAI-compatible)
+    // Get endpoint (for Ollama and Llama.cpp)
     let endpoint = request.endpoint.clone();
 
-    // Separate endpoints for Ollama and OpenAI-compatible
+    // Separate endpoints for Ollama and Llama.cpp
     let ollama_endpoint = if provider == LLMProvider::Ollama {
         endpoint.as_deref()
     } else {
         None
     };
 
-    let openai_compatible_endpoint = if provider == LLMProvider::OpenAICompatible {
+    let llamacpp_endpoint = if provider == LLMProvider::LlamaCpp {
         endpoint.as_deref()
     } else {
         None
@@ -130,7 +130,7 @@ pub async fn api_chat_send_message<R: Runtime>(
         &provider,
         &request.model,
         ollama_endpoint,
-        openai_compatible_endpoint,
+        llamacpp_endpoint,
         request.user_messages.clone(),
         &request.current_message,
     )
@@ -173,14 +173,14 @@ pub async fn api_chat_send_message<R: Runtime>(
     // Spawn background task for streaming
     // Clone endpoints for move into async block
     let ollama_endpoint_clone = ollama_endpoint.map(|s| s.to_string());
-    let openai_compatible_endpoint_clone = openai_compatible_endpoint.map(|s| s.to_string());
+    let llamacpp_endpoint_clone = llamacpp_endpoint.map(|s| s.to_string());
 
     tauri::async_runtime::spawn(async move {
         log_info!("Starting streaming chat for request_id: {}", request_id);
 
         // Use cloned endpoints
         let ollama_endpoint = ollama_endpoint_clone.as_deref();
-        let openai_compatible_endpoint = openai_compatible_endpoint_clone.as_deref();
+        let llamacpp_endpoint = llamacpp_endpoint_clone.as_deref();
 
         match stream_chat(
             app.clone(),
@@ -191,7 +191,7 @@ pub async fn api_chat_send_message<R: Runtime>(
             messages,
             request_id.clone(),
             ollama_endpoint,
-            openai_compatible_endpoint,
+            llamacpp_endpoint,
             temperature,
             top_p,
             max_tokens,

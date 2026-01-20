@@ -91,13 +91,13 @@ impl SummaryService {
         };
 
         // Get model config once and extract endpoints based on provider
-        let (ollama_endpoint, openai_compatible_endpoint) = match SettingsRepository::get_model_config(&pool).await {
+        let (ollama_endpoint, llamacpp_endpoint) = match SettingsRepository::get_model_config(&pool).await {
             Ok(Some(config)) => {
                 info!(
-                    "✓ Retrieved model config: ollama_endpoint={:?}, openai_compatible_endpoint={:?}",
-                    config.ollama_endpoint, config.openai_compatible_endpoint
+                    "✓ Retrieved model config: ollama_endpoint={:?}, llamacpp_endpoint={:?}",
+                    config.ollama_endpoint, config.llamacpp_endpoint
                 );
-                (config.ollama_endpoint, config.openai_compatible_endpoint)
+                (config.ollama_endpoint, config.llamacpp_endpoint)
             }
             Ok(None) => {
                 warn!("⚠️ Model config not found in database, endpoints will be None");
@@ -118,12 +118,12 @@ impl SummaryService {
                     warn!("⚠️ Ollama endpoint not configured, will use default (localhost:11434)");
                 }
             }
-            LLMProvider::OpenAICompatible => {
-                if let Some(ref ep) = openai_compatible_endpoint {
-                    info!("✓ Using OpenAI Compatible endpoint: {}", ep);
+            LLMProvider::LlamaCpp => {
+                if let Some(ref ep) = llamacpp_endpoint {
+                    info!("✓ Using Llama.cpp endpoint: {}", ep);
                 } else {
-                    error!("❌ OpenAI Compatible endpoint not configured in database");
-                    let err_msg = "OpenAI Compatible endpoint not configured".to_string();
+                    error!("❌ Llama.cpp endpoint not configured in database");
+                    let err_msg = "Llama.cpp endpoint not configured".to_string();
                     Self::update_process_failed(&pool, &meeting_id, &err_msg).await;
                     return;
                 }
@@ -166,8 +166,8 @@ impl SummaryService {
         if let Some(ref ep) = ollama_endpoint {
             info!("  → Ollama endpoint: {}", ep);
         }
-        if let Some(ref ep) = openai_compatible_endpoint {
-            info!("  → OpenAI Compatible endpoint: {}", ep);
+        if let Some(ref ep) = llamacpp_endpoint {
+            info!("  → Llama.cpp endpoint: {}", ep);
         }
 
         let client = reqwest::Client::new();
@@ -182,7 +182,7 @@ impl SummaryService {
             &language_id,
             token_threshold,
             ollama_endpoint.as_deref(),
-            openai_compatible_endpoint.as_deref(),
+            llamacpp_endpoint.as_deref(),
             completion_params,
         )
         .await;

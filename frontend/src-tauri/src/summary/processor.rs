@@ -143,7 +143,7 @@ pub async fn generate_meeting_summary(
     language_id: &str,
     token_threshold: usize,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    llamacpp_endpoint: Option<&str>,
     completion_params: Option<CompletionParams>,
 ) -> Result<(String, i64, Option<u64>, u64), String> {
     info!(
@@ -194,7 +194,7 @@ pub async fn generate_meeting_summary(
                 &system_prompt_chunk,
                 &user_prompt_chunk,
                 ollama_endpoint,
-                openai_compatible_endpoint,
+                llamacpp_endpoint,
                 false, // Chunk summaries don't need TTFT tracking
                 completion_params.clone(),
             )
@@ -248,7 +248,7 @@ pub async fn generate_meeting_summary(
                 &system_prompt_combine,
                 &user_prompt_combine,
                 ollama_endpoint,
-                openai_compatible_endpoint,
+                llamacpp_endpoint,
                 false, // Combining chunks doesn't need TTFT tracking
                 completion_params.clone(),
             )
@@ -324,7 +324,7 @@ You are an expert meeting summarizer. Generate a final meeting report by filling
         &final_system_prompt,
         &final_user_prompt,
         ollama_endpoint,
-        openai_compatible_endpoint,
+        llamacpp_endpoint,
         true, // Final summary generation: enable streaming for TTFT tracking
         completion_params,
     )

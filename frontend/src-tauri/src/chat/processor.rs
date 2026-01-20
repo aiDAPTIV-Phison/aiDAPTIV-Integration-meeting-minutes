@@ -19,7 +19,7 @@ static METADATA_CACHE: Lazy<ModelMetadataCache> = Lazy::new(|| {
 /// * `provider` - LLM provider
 /// * `model_name` - Model name (for Ollama context size lookup)
 /// * `ollama_endpoint` - Optional Ollama endpoint
-/// * `openai_compatible_endpoint` - Optional OpenAI-compatible endpoint
+/// * `llamacpp_endpoint` - Optional Llama.cpp endpoint
 ///
 /// # Returns
 /// First chunk of transcript (or full text if no chunking needed)
@@ -28,10 +28,10 @@ pub async fn get_transcript_chunk_for_chat(
     provider: &LLMProvider,
     model_name: &str,
     ollama_endpoint: Option<&str>,
-    _openai_compatible_endpoint: Option<&str>,
+    _llamacpp_endpoint: Option<&str>,
 ) -> String {
     // Calculate token threshold - same logic as summary/processor
-    // Only Ollama uses endpoint for metadata lookup, but we accept openai_compatible_endpoint
+    // Only Ollama uses endpoint for metadata lookup, but we accept llamacpp_endpoint
     // for consistency with summary/processor signature
     let token_threshold = if provider == &LLMProvider::Ollama {
         match METADATA_CACHE.get_or_fetch(model_name, ollama_endpoint).await {
@@ -53,7 +53,7 @@ pub async fn get_transcript_chunk_for_chat(
             }
         }
     } else {
-        // Cloud providers (OpenAI, Claude, Groq, OpenAI-compatible) handle large contexts automatically
+        // Cloud providers (OpenAI, Claude, Groq, Llama.cpp) handle large contexts automatically
         100000  // Effectively unlimited for single-pass processing
     };
 
@@ -107,7 +107,7 @@ Please answer the user's questions based on the {} above. Be concise and accurat
 /// * `provider` - LLM provider
 /// * `model_name` - Model name (for Ollama context size lookup)
 /// * `ollama_endpoint` - Optional Ollama endpoint
-/// * `openai_compatible_endpoint` - Optional OpenAI-compatible endpoint
+/// * `llamacpp_endpoint` - Optional Llama.cpp endpoint
 ///
 /// # Returns
 /// Ok(String) with formatted system prompt, or Err(String) if transcript exceeds single-chunk limit
@@ -117,7 +117,7 @@ pub async fn build_chat_system_prompt(
     provider: &LLMProvider,
     model_name: &str,
     ollama_endpoint: Option<&str>,
-    _openai_compatible_endpoint: Option<&str>,
+    _llamacpp_endpoint: Option<&str>,
 ) -> Result<String, String> {
     info!("Building chat system prompt for meeting: {}", meeting.id);
 
@@ -194,7 +194,7 @@ pub async fn build_chat_system_prompt(
 /// * `provider` - LLM provider
 /// * `model_name` - Model name (for Ollama context size lookup)
 /// * `ollama_endpoint` - Optional Ollama endpoint
-/// * `openai_compatible_endpoint` - Optional OpenAI-compatible endpoint
+/// * `llamacpp_endpoint` - Optional Llama.cpp endpoint
 /// * `user_messages` - Previous chat messages (user and assistant)
 /// * `current_message` - Current user message
 ///
@@ -206,7 +206,7 @@ pub async fn build_chat_messages(
     provider: &LLMProvider,
     model_name: &str,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    llamacpp_endpoint: Option<&str>,
     user_messages: Vec<ChatMessage>,
     current_message: &str,
 ) -> Result<Vec<ChatMessage>, String> {
@@ -222,7 +222,7 @@ pub async fn build_chat_messages(
             provider,
             model_name,
             ollama_endpoint,
-            openai_compatible_endpoint,
+            llamacpp_endpoint,
         )
         .await?,
     });

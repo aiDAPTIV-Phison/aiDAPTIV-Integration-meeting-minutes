@@ -43,26 +43,26 @@ impl SettingsRepository {
         model: &str,
         whisper_model: &str,
         ollama_endpoint: Option<&str>,
-        openai_compatible_endpoint: Option<&str>,
+        llamacpp_endpoint: Option<&str>,
     ) -> std::result::Result<(), sqlx::Error> {
         // Using id '1' for backward compatibility
         sqlx::query(
             r#"
-            INSERT INTO settings (id, provider, model, whisperModel, ollamaEndpoint, openaiCompatibleEndpoint)
+            INSERT INTO settings (id, provider, model, whisperModel, ollamaEndpoint, llamacppEndpoint)
             VALUES ('1', $1, $2, $3, $4, $5)
             ON CONFLICT(id) DO UPDATE SET
                 provider = excluded.provider,
                 model = excluded.model,
                 whisperModel = excluded.whisperModel,
                 ollamaEndpoint = excluded.ollamaEndpoint,
-                openaiCompatibleEndpoint = excluded.openaiCompatibleEndpoint
+                llamacppEndpoint = excluded.llamacppEndpoint
             "#,
         )
         .bind(provider)
         .bind(model)
         .bind(whisper_model)
         .bind(ollama_endpoint)
-        .bind(openai_compatible_endpoint)
+        .bind(llamacpp_endpoint)
         .execute(pool)
         .await?;
 
@@ -99,7 +99,7 @@ impl SettingsRepository {
             "ollama" => "ollamaApiKey",
             "groq" => "groqApiKey",
             "openrouter" => "openRouterApiKey",
-            "openai-compatible" => "openaiCompatibleApiKey",
+            "llamacpp" | "openai-compatible" => "llamacppApiKey",
             _ => {
                 return Err(sqlx::Error::Protocol(
                     format!("Invalid provider: {}", provider).into(),
@@ -131,7 +131,7 @@ impl SettingsRepository {
             "groq" => "groqApiKey",
             "claude" => "anthropicApiKey",
             "openrouter" => "openRouterApiKey",
-            "openai-compatible" => "openaiCompatibleApiKey",
+            "llamacpp" | "openai-compatible" => "llamacppApiKey",
             _ => {
                 return Err(sqlx::Error::Protocol(
                     format!("Invalid provider: {}", provider).into(),
@@ -251,7 +251,7 @@ impl SettingsRepository {
             "groq" => "groqApiKey",
             "claude" => "anthropicApiKey",
             "openrouter" => "openRouterApiKey",
-            "openai-compatible" => "openaiCompatibleApiKey",
+            "llamacpp" | "openai-compatible" => "llamacppApiKey",
             _ => {
                 return Err(sqlx::Error::Protocol(
                     format!("Invalid provider: {}", provider).into(),

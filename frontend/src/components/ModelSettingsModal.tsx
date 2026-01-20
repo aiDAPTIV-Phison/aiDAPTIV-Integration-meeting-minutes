@@ -34,12 +34,12 @@ export interface CompletionParams {
 }
 
 export interface ModelConfig {
-  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'openai-compatible';
+  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'llamacpp';
   model: string;
   whisperModel: string;
   apiKey?: string | null;
   ollamaEndpoint?: string | null;
-  openaiCompatibleEndpoint?: string | null;
+  llamacppEndpoint?: string | null;
 }
 
 interface OllamaModel {
@@ -81,7 +81,7 @@ export function ModelSettingsModal({
   const [openRouterError, setOpenRouterError] = useState<string>('');
   const [isLoadingOpenRouter, setIsLoadingOpenRouter] = useState<boolean>(false);
   const [ollamaEndpoint, setOllamaEndpoint] = useState<string>(modelConfig.ollamaEndpoint || '');
-  const [openaiCompatibleEndpoint, setOpenaiCompatibleEndpoint] = useState<string>(modelConfig.openaiCompatibleEndpoint || '');
+  const [llamacppEndpoint, setLlamacppEndpoint] = useState<string>(modelConfig.llamacppEndpoint || '');
   const [isLoadingOllama, setIsLoadingOllama] = useState<boolean>(false);
   const [lastFetchedEndpoint, setLastFetchedEndpoint] = useState<string>(modelConfig.ollamaEndpoint || '');
   const [endpointValidationState, setEndpointValidationState] = useState<'valid' | 'invalid' | 'none'>('none');
@@ -169,12 +169,12 @@ export function ModelSettingsModal({
     }
   };
 
-  // Sync openaiCompatibleEndpoint when modelConfig changes
+  // Sync llamacppEndpoint when modelConfig changes
   useEffect(() => {
-    if (modelConfig.openaiCompatibleEndpoint !== undefined) {
-      setOpenaiCompatibleEndpoint(modelConfig.openaiCompatibleEndpoint || '');
+    if (modelConfig.llamacppEndpoint !== undefined) {
+      setLlamacppEndpoint(modelConfig.llamacppEndpoint || '');
     }
-  }, [modelConfig.openaiCompatibleEndpoint]);
+  }, [modelConfig.llamacppEndpoint]);
 
   // Sync ollamaEndpoint when modelConfig changes
   useEffect(() => {
@@ -249,7 +249,7 @@ export function ModelSettingsModal({
       'gpt-3.5-turbo-1106'
     ],
     openrouter: openRouterModels.map((m) => m.id),
-    'openai-compatible': [], // Will be manually entered or fetched
+    llamacpp: [], // Will be manually entered or fetched
   };
 
   const requiresApiKey =
@@ -257,7 +257,7 @@ export function ModelSettingsModal({
     modelConfig.provider === 'groq' ||
     modelConfig.provider === 'openai' ||
     modelConfig.provider === 'openrouter' ||
-    modelConfig.provider === 'openai-compatible';
+    modelConfig.provider === 'llamacpp';
 
   // Check if Ollama endpoint has changed but models haven't been fetched yet
   const ollamaEndpointChanged = modelConfig.provider === 'ollama' &&
@@ -461,9 +461,9 @@ export function ModelSettingsModal({
       updatedConfig.ollamaEndpoint = ollamaEndpoint.trim() || null;
     }
 
-    // Only update openaiCompatibleEndpoint if provider is openai-compatible
-    if (modelConfig.provider === 'openai-compatible') {
-      updatedConfig.openaiCompatibleEndpoint = openaiCompatibleEndpoint.trim() || null;
+    // Only update llamacppEndpoint if provider is llamacpp
+    if (modelConfig.provider === 'llamacpp') {
+      updatedConfig.llamacppEndpoint = llamacppEndpoint.trim() || null;
     }
     setModelConfig(updatedConfig);
 
@@ -483,8 +483,8 @@ export function ModelSettingsModal({
       setAutoSummaryInterval(finalInterval);  // Update UI if corrected
     }
 
-    // Save completionParams to database
-    if (modelConfig.provider === 'openai-compatible') {
+    // Save completionParams to database (only for Llama.cpp provider)
+    if (modelConfig.provider === 'llamacpp') {
       try {
         await invoke('api_save_completion_params', {
           completionParams: JSON.stringify(completionParams),
@@ -643,7 +643,7 @@ export function ModelSettingsModal({
                 <SelectItem value="ollama">Ollama</SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
                 <SelectItem value="openrouter">OpenRouter</SelectItem>
-                <SelectItem value="openai-compatible">OpenAI Compatible</SelectItem>
+                <SelectItem value="llamacpp">Llama.cpp</SelectItem>
               </SelectContent>
             </Select>
 
@@ -933,18 +933,18 @@ export function ModelSettingsModal({
           </div>
         )}
 
-        {modelConfig.provider === 'openai-compatible' && (
+        {modelConfig.provider === 'llamacpp' && (
           <div className="space-y-4">
             <div>
               <Label>Base URL</Label>
               <p className="text-sm text-muted-foreground mt-1 mb-2">
-                Enter your OpenAI-compatible API endpoint
+                Enter your Llama.cpp server endpoint
               </p>
               <Input
                 type="url"
-                value={openaiCompatibleEndpoint}
-                onChange={(e) => setOpenaiCompatibleEndpoint(e.target.value)}
-                placeholder="https://api.your-service.com"
+                value={llamacppEndpoint}
+                onChange={(e) => setLlamacppEndpoint(e.target.value)}
+                placeholder="http://localhost:8080"
                 className="mt-1"
               />
             </div>
@@ -984,13 +984,13 @@ export function ModelSettingsModal({
         </div>
       </div> */}
 
-      {/* Completion Parameters - Only for OpenAI Compatible */}
-      {modelConfig.provider === 'openai-compatible' && (
+      {/* Completion Parameters - Only for Llama.cpp */}
+      {modelConfig.provider === 'llamacpp' && (
         <div className="mt-6 pt-6 border-t border-gray-200">
           <div className="mb-4">
             <Label className="text-base font-medium">Completion Parameters</Label>
             <p className="text-sm text-muted-foreground mt-1">
-              Configure LLM chat completion parameters for summary generation
+              Configure Llama.cpp-specific parameters for summary generation
             </p>
           </div>
           <div className="space-y-3">

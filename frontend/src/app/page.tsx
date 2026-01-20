@@ -68,11 +68,11 @@ export default function Home() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'openai-compatible',
+    provider: 'llamacpp',
     model: 'LocalModel',
     whisperModel: 'large-v3',
     apiKey: 'na',
-    openaiCompatibleEndpoint: 'http://127.0.0.1:13141/v1'
+    llamacppEndpoint: 'http://127.0.0.1:13141/v1'
   });
   const [transcriptModelConfig, setTranscriptModelConfig] = useState<TranscriptModelProps>({
     provider: 'parakeet',
@@ -346,7 +346,7 @@ export default function Home() {
     groq: ['llama-3.3-70b-versatile'],
     openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     openrouter: [],
-    'openai-compatible': [],
+    llamacpp: [],
   };
 
   useEffect(() => {
@@ -2027,7 +2027,7 @@ export default function Home() {
             whisperModel: data.whisperModel || data.whisper_model || prev.whisperModel,
             apiKey: data.apiKey || data.api_key || prev.apiKey,
             ollamaEndpoint: data.ollamaEndpoint || data.ollama_endpoint || prev.ollamaEndpoint,
-            openaiCompatibleEndpoint: data.openaiCompatibleEndpoint || data.openai_compatible_endpoint || prev.openaiCompatibleEndpoint,
+            llamacppEndpoint: data.llamacppEndpoint || prev.llamacppEndpoint,
           }));
         }
       } catch (error) {
@@ -2552,10 +2552,12 @@ export default function Home() {
                             value={modelConfig.provider}
                             onChange={(e) => {
                               const provider = e.target.value as ModelConfig['provider'];
+                              const availableModels = modelOptions[provider];
                               setModelConfig({
                                 ...modelConfig,
                                 provider,
-                                model: modelOptions[provider][0]
+                                // Use first available model, or keep current model if list is empty (for manual entry like llamacpp)
+                                model: availableModels.length > 0 ? availableModels[0] : modelConfig.model
                               });
                             }}
                           >
@@ -2563,6 +2565,7 @@ export default function Home() {
                             <option value="groq">Groq</option>
                             <option value="ollama">Ollama</option>
                             <option value="openrouter">OpenRouter</option>
+                            <option value="llamacpp">Llama.cpp</option>
                           </select>
 
                           <select
