@@ -11,12 +11,12 @@ interface SummaryModelSettingsProps {
 
 export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsProps) {
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'openai-compatible',
+    provider: 'llamacpp',
     model: 'LocalModel',
     whisperModel: 'large-v3',
     apiKey: 'local',
     ollamaEndpoint: null,
-    openaiCompatibleEndpoint: 'http://127.0.0.1:13141/v1'
+    llamacppEndpoint: 'http://127.0.0.1:13141/v1'
   });
 
   // Reusable fetch function
@@ -84,7 +84,7 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
         whisperModel: config.whisperModel,
         apiKey: config.apiKey,
         ollamaEndpoint: config.ollamaEndpoint,
-        openaiCompatibleEndpoint: config.openaiCompatibleEndpoint,
+        llamacppEndpoint: config.llamacppEndpoint,
       });
 
       setModelConfig(config);

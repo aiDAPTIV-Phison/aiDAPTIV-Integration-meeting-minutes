@@ -312,7 +312,7 @@ pub enum LLMProvider {
     Groq,
     Ollama,
     OpenRouter,
-    OpenAICompatible,
+    LlamaCpp,
 }
 
 impl LLMProvider {
@@ -324,7 +324,9 @@ impl LLMProvider {
             "groq" => Ok(Self::Groq),
             "ollama" => Ok(Self::Ollama),
             "openrouter" => Ok(Self::OpenRouter),
-            "openai-compatible" => Ok(Self::OpenAICompatible),
+            "llamacpp" => Ok(Self::LlamaCpp),
+            // Keep backward compatibility
+            "openai-compatible" => Ok(Self::LlamaCpp),
             _ => Err(format!("Unsupported LLM provider: {}", s)),
         }
     }
@@ -348,7 +350,7 @@ pub struct SummaryResult {
 /// * `system_prompt` - System instructions for the LLM
 /// * `user_prompt` - User query/content to process
 /// * `ollama_endpoint` - Optional custom Ollama endpoint (defaults to localhost:11434)
-/// * `openai_compatible_endpoint` - Optional custom OpenAI-compatible endpoint
+/// * `llamacpp_endpoint` - Optional custom Llama.cpp endpoint
 /// * `stream` - Whether to use streaming mode (enables TTFT tracking)
 /// * `completion_params` - Optional completion parameters (temperature, max_tokens, etc.)
 ///
@@ -362,7 +364,7 @@ pub async fn generate_summary(
     system_prompt: &str,
     user_prompt: &str,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    llamacpp_endpoint: Option<&str>,
     stream: bool,
     completion_params: Option<CompletionParams>,
 ) -> Result<SummaryResult, String> {
@@ -378,7 +380,7 @@ pub async fn generate_summary(
             system_prompt,
             user_prompt,
             ollama_endpoint,
-            openai_compatible_endpoint,
+            llamacpp_endpoint,
             completion_params,
         )
         .await
@@ -391,7 +393,7 @@ pub async fn generate_summary(
             system_prompt,
             user_prompt,
             ollama_endpoint,
-            openai_compatible_endpoint,
+            llamacpp_endpoint,
             completion_params,
         )
         .await
@@ -407,7 +409,7 @@ async fn _generate_summary_non_streaming(
     system_prompt: &str,
     user_prompt: &str,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    llamacpp_endpoint: Option<&str>,
     completion_params: Option<CompletionParams>,
 ) -> Result<SummaryResult, String> {
     use std::time::Instant;
@@ -451,9 +453,9 @@ async fn _generate_summary_non_streaming(
             );
             ("https://api.anthropic.com/v1/messages".to_string(), header_map)
         },
-        LLMProvider::OpenAICompatible => {
-            let base_url = openai_compatible_endpoint
-                .ok_or("OpenAI Compatible endpoint not configured")?
+        LLMProvider::LlamaCpp => {
+            let base_url = llamacpp_endpoint
+                .ok_or("Llama.cpp endpoint not configured")?
                 .trim_end_matches('/');
             (
                 format!("{}/chat/completions", base_url),
@@ -464,8 +466,8 @@ async fn _generate_summary_non_streaming(
 
     // Add authorization header for non-Claude providers
     if provider != &LLMProvider::Claude {
-        // OpenAI Compatible might not need API key (local services)
-        if !api_key.is_empty() || provider != &LLMProvider::OpenAICompatible {
+        // Llama.cpp might not need API key (local services)
+        if !api_key.is_empty() || provider != &LLMProvider::LlamaCpp {
             headers.insert(
                 header::AUTHORIZATION,
                 format!("Bearer {}", api_key)
@@ -592,7 +594,7 @@ async fn generate_summary_streaming(
     system_prompt: &str,
     user_prompt: &str,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    llamacpp_endpoint: Option<&str>,
     completion_params: Option<CompletionParams>,
 ) -> Result<SummaryResult, String> {
     use std::time::Instant;
@@ -617,7 +619,7 @@ async fn generate_summary_streaming(
             system_prompt,
             user_prompt,
             ollama_endpoint,
-            openai_compatible_endpoint,
+            llamacpp_endpoint,
             completion_params,
         )
         .await
@@ -633,7 +635,7 @@ async fn _generate_summary_streaming(
     system_prompt: &str,
     user_prompt: &str,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    llamacpp_endpoint: Option<&str>,
     completion_params: Option<CompletionParams>,
 ) -> Result<SummaryResult, String> {
     use std::time::Instant;
@@ -662,9 +664,9 @@ async fn _generate_summary_streaming(
                 header::HeaderMap::new(),
             )
         }
-        LLMProvider::OpenAICompatible => {
-            let base_url = openai_compatible_endpoint
-                .ok_or("OpenAI Compatible endpoint not configured")?
+        LLMProvider::LlamaCpp => {
+            let base_url = llamacpp_endpoint
+                .ok_or("Llama.cpp endpoint not configured")?
                 .trim_end_matches('/');
             (
                 format!("{}/chat/completions", base_url),
@@ -675,7 +677,7 @@ async fn _generate_summary_streaming(
     };
 
     // Add authorization header
-    if !api_key.is_empty() || provider != &LLMProvider::OpenAICompatible {
+    if !api_key.is_empty() || provider != &LLMProvider::LlamaCpp {
         headers.insert(
             header::AUTHORIZATION,
             format!("Bearer {}", api_key)
@@ -705,6 +707,13 @@ async fn _generate_summary_streaming(
     // Use provided completion params or defaults
     let params = completion_params.unwrap_or_default();
 
+    // Only include llama.cpp-specific params for LlamaCpp provider
+    let (repeat_penalty, repeat_last_n, chat_template_kwargs) = if provider == &LLMProvider::LlamaCpp {
+        (params.repeat_penalty, params.repeat_last_n, params.chat_template_kwargs)
+    } else {
+        (None, None, None)
+    };
+
     let request_body = StreamingChatRequest {
         model: model_name.to_string(),
         messages,
@@ -712,9 +721,9 @@ async fn _generate_summary_streaming(
         temperature: params.temperature,
         top_p: params.top_p,
         max_tokens: params.max_tokens,
-        repeat_penalty: params.repeat_penalty,
-        repeat_last_n: params.repeat_last_n,
-        chat_template_kwargs: params.chat_template_kwargs,
+        repeat_penalty,
+        repeat_last_n,
+        chat_template_kwargs,
     };
 
     info!("🚀 Sending streaming summary request to {}: {}", provider_name(provider), api_url);
@@ -974,7 +983,7 @@ fn provider_name(provider: &LLMProvider) -> &str {
         LLMProvider::Groq => "Groq",
         LLMProvider::Ollama => "Ollama",
         LLMProvider::OpenRouter => "OpenRouter",
-        LLMProvider::OpenAICompatible => "OpenAI Compatible",
+        LLMProvider::LlamaCpp => "Llama.cpp",
     }
 }
 
@@ -993,7 +1002,7 @@ fn provider_name(provider: &LLMProvider) -> &str {
 /// * `messages` - Chat history (system + user messages)
 /// * `request_id` - Unique identifier for this request (for event routing)
 /// * `ollama_endpoint` - Optional custom Ollama endpoint
-/// * `openai_compatible_endpoint` - Optional custom OpenAI-compatible endpoint
+/// * `llamacpp_endpoint` - Optional custom Llama.cpp endpoint
 /// * `temperature` - Optional sampling temperature (0.0 to 2.0)
 /// * `top_p` - Optional nucleus sampling parameter
 /// * `max_tokens` - Optional maximum tokens to generate
@@ -1011,7 +1020,7 @@ pub async fn stream_chat<R: Runtime>(
     messages: Vec<ChatMessage>,
     request_id: String,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    llamacpp_endpoint: Option<&str>,
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
@@ -1052,7 +1061,7 @@ pub async fn stream_chat<R: Runtime>(
                 messages,
                 request_id.clone(),
                 ollama_endpoint,
-                openai_compatible_endpoint,
+                llamacpp_endpoint,
                 temperature,
                 top_p,
                 max_tokens,
@@ -1094,7 +1103,7 @@ async fn stream_chat_openai_compatible<R: Runtime>(
     messages: Vec<ChatMessage>,
     request_id: String,
     ollama_endpoint: Option<&str>,
-    openai_compatible_endpoint: Option<&str>,
+    llamacpp_endpoint: Option<&str>,
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
@@ -1125,9 +1134,9 @@ async fn stream_chat_openai_compatible<R: Runtime>(
                 header::HeaderMap::new(),
             )
         }
-        LLMProvider::OpenAICompatible => {
-            let base_url = openai_compatible_endpoint
-                .ok_or("OpenAI Compatible endpoint not configured")?
+        LLMProvider::LlamaCpp => {
+            let base_url = llamacpp_endpoint
+                .ok_or("Llama.cpp endpoint not configured")?
                 .trim_end_matches('/');
             (
                 format!("{}/chat/completions", base_url),
@@ -1138,7 +1147,7 @@ async fn stream_chat_openai_compatible<R: Runtime>(
     };
 
     // Add authorization header
-    if !api_key.is_empty() || provider != &LLMProvider::OpenAICompatible {
+    if !api_key.is_empty() || provider != &LLMProvider::LlamaCpp {
         headers.insert(
             header::AUTHORIZATION,
             format!("Bearer {}", api_key)

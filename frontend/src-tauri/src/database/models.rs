@@ -100,12 +100,12 @@ pub struct Setting {
     #[sqlx(rename = "ollamaEndpoint")]
     #[serde(rename = "ollamaEndpoint")]
     pub ollama_endpoint: Option<String>,
-    #[sqlx(rename = "openaiCompatibleEndpoint")]
-    #[serde(rename = "openaiCompatibleEndpoint")]
-    pub openai_compatible_endpoint: Option<String>,
-    #[sqlx(rename = "openaiCompatibleApiKey")]
-    #[serde(rename = "openaiCompatibleApiKey")]
-    pub openai_compatible_api_key: Option<String>,
+    #[sqlx(rename = "llamacppEndpoint")]
+    #[serde(rename = "llamacppEndpoint")]
+    pub llamacpp_endpoint: Option<String>,
+    #[sqlx(rename = "llamacppApiKey")]
+    #[serde(rename = "llamacppApiKey")]
+    pub llamacpp_api_key: Option<String>,
     #[sqlx(rename = "completionParams")]
     #[serde(rename = "completionParams")]
     pub completion_params: Option<String>, // JSON string

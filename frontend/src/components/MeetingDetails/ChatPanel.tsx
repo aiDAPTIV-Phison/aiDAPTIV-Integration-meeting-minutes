@@ -384,12 +384,12 @@ export function ChatPanel({
       // Get API key (same key used for all providers)
       const apiKey = modelConfig.apiKey || undefined;
 
-      // Get endpoint for Ollama or OpenAI-compatible
+      // Get endpoint for Ollama or Llama.cpp
       let endpoint: string | undefined;
       if (modelConfig.provider === 'ollama') {
         endpoint = modelConfig.ollamaEndpoint || undefined;
-      } else if (modelConfig.provider === 'openai-compatible') {
-        endpoint = modelConfig.openaiCompatibleEndpoint || undefined;
+      } else if (modelConfig.provider === 'llamacpp') {
+        endpoint = modelConfig.llamacppEndpoint || undefined;
       }
 
       // Load completion params from database (preferred) or localStorage (fallback)

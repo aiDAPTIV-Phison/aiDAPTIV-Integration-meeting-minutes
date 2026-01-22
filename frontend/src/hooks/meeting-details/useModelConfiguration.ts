@@ -11,12 +11,12 @@ interface UseModelConfigurationProps {
 export function useModelConfiguration({ serverAddress }: UseModelConfigurationProps) {
   // Note: No hardcoded defaults - DB is the source of truth
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'openai-compatible',
+    provider: 'llamacpp',
     model: 'LocalModel',
     whisperModel: 'large-v3',
     apiKey: 'local',
     ollamaEndpoint: null,
-    openaiCompatibleEndpoint: 'http://127.0.0.1:13141/v1'
+    llamacppEndpoint: 'http://127.0.0.1:13141/v1'
   });
   const [isLoading, setIsLoading] = useState(true);
   const [, setError] = useState<string>('');
@@ -92,7 +92,7 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
         whisperModel: configToSave.whisperModel,
         apiKey: configToSave.apiKey ?? null,
         ollamaEndpoint: configToSave.ollamaEndpoint ?? null,
-        openaiCompatibleEndpoint: configToSave.openaiCompatibleEndpoint ?? null
+        llamacppEndpoint: configToSave.llamacppEndpoint ?? null
       };
       console.log('Saving model config with payload:', payload);
 
@@ -115,7 +115,7 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
         whisperModel: payload.whisperModel,
         apiKey: payload.apiKey,
         ollamaEndpoint: payload.ollamaEndpoint,
-        openaiCompatibleEndpoint: payload.openaiCompatibleEndpoint,
+        llamacppEndpoint: payload.llamacppEndpoint,
       });
 
       console.log('Save model config success');
