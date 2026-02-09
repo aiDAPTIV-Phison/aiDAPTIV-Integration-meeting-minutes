@@ -944,7 +944,7 @@ export function ModelSettingsModal({
                 type="url"
                 value={llamacppEndpoint}
                 onChange={(e) => setLlamacppEndpoint(e.target.value)}
-                placeholder="http://localhost:8080"
+                placeholder="http://127.0.0.1:13141/v1"
                 className="mt-1"
               />
             </div>
