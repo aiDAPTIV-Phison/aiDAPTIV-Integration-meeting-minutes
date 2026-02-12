@@ -148,9 +148,11 @@ pub async fn api_chat_send_message<R: Runtime>(
     let api_key = if let Some(key) = request.api_key {
         key
     } else {
-        // For Ollama, API key is optional
+        // For Ollama and LlamaCpp, API key is optional (use default)
         if matches!(provider, LLMProvider::Ollama) {
             String::new()
+        } else if matches!(provider, LLMProvider::LlamaCpp) {
+            "empty".to_string()
         } else {
             return Err("API key is required for this provider".to_string());
         }

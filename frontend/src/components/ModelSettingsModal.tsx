@@ -264,7 +264,7 @@ export function ModelSettingsModal({
     ollamaEndpoint.trim() !== lastFetchedEndpoint.trim();
 
   const isDoneDisabled =
-    (requiresApiKey && (!apiKey || (typeof apiKey === 'string' && !apiKey.trim()))) ||
+    (requiresApiKey && (!apiKey || (typeof apiKey === 'string' && !apiKey.trim())) && modelConfig.provider !== 'llamacpp') ||
     (modelConfig.provider === 'ollama' && ollamaEndpointChanged);
 
   useEffect(() => {

@@ -66,21 +66,25 @@ impl SummaryService {
             }
         };
 
-        // Validate and setup api_key, Flexible for Ollama
+        // Validate and setup api_key, Flexible for Ollama and LlamaCpp
         let api_key = match SettingsRepository::get_api_key(&pool, &model_provider).await {
             Ok(Some(key)) if !key.is_empty() => {
                 info!("✓ Retrieved API key for {} (length: {})", &model_provider, key.len());
                 key
             }
             Ok(None) | Ok(Some(_)) => {
-                if provider != LLMProvider::Ollama {
+                if provider == LLMProvider::Ollama {
+                    info!("✓ No API key needed for Ollama provider");
+                    String::new()
+                } else if provider == LLMProvider::LlamaCpp {
+                    info!("✓ Using default API key 'empty' for LlamaCpp provider");
+                    "empty".to_string()
+                } else {
                     let err_msg = format!("Api key not found for {}", &model_provider);
                     error!("❌ {}", err_msg);
                     Self::update_process_failed(&pool, &meeting_id, &err_msg).await;
                     return;
                 }
-                info!("✓ No API key needed for Ollama provider");
-                String::new()
             }
             Err(e) => {
                 let err_msg = format!("Failed to retrieve api key for {} : {}", &model_provider, e);
