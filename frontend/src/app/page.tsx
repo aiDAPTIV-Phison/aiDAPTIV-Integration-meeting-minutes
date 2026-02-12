@@ -1453,6 +1453,7 @@ export default function Home() {
         overlap: 1000,
         customPrompt: prompt,
         templateId: templates.selectedTemplate,
+        languageId: templates.selectedLanguage,
         completionParams: completionParams,
       }) as any;
 
