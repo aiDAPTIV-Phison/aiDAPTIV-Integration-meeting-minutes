@@ -39,6 +39,7 @@ interface SummaryGeneratorButtonGroupProps {
   onRememberPreferenceToggle: (remember: boolean) => void;
   hasTranscripts?: boolean;
   isModelConfigLoading?: boolean;
+  hasConfiguredModel?: boolean;
   onChatClick?: () => void;
 }
 
@@ -58,6 +59,7 @@ export function SummaryGeneratorButtonGroup({
   onRememberPreferenceToggle,
   hasTranscripts = true,
   isModelConfigLoading = false,
+  hasConfiguredModel = true,
   onChatClick
 }: SummaryGeneratorButtonGroupProps) {
   const [isCheckingModels, setIsCheckingModels] = useState(false);
@@ -68,8 +70,16 @@ export function SummaryGeneratorButtonGroup({
     return null;
   }
 
-  const checkOllamaModelsAndGenerate = async () => {
-    // Only check for Ollama provider
+  const checkModelConfigAndGenerate = async () => {
+    if (!hasConfiguredModel) {
+      toast.error(
+        'No AI model configured. Please set up a model in Settings first.',
+        { duration: 5000 }
+      );
+      setSettingsDialogOpen(true);
+      return;
+    }
+
     if (modelConfig.provider !== 'ollama') {
       onGenerateSummary(customPrompt);
       return;
@@ -81,7 +91,6 @@ export function SummaryGeneratorButtonGroup({
       const models = await invoke('get_ollama_models', { endpoint }) as any[];
 
       if (!models || models.length === 0) {
-        // No models available, show message and open settings
         toast.error(
           'No Ollama models found. Please download gemma2:2b from Model Settings.',
           { duration: 5000 }
@@ -90,7 +99,6 @@ export function SummaryGeneratorButtonGroup({
         return;
       }
 
-      // Models are available, proceed with generation
       onGenerateSummary(customPrompt);
     } catch (error) {
       console.error('Error checking Ollama models:', error);
@@ -113,7 +121,7 @@ export function SummaryGeneratorButtonGroup({
         className="bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border-blue-200 xl:px-4"
         onClick={() => {
           Analytics.trackButtonClick('generate_summary', 'meeting_details');
-          checkOllamaModelsAndGenerate();
+          checkModelConfigAndGenerate();
         }}
         disabled={summaryStatus === 'processing' || isCheckingModels || isModelConfigLoading}
         title={

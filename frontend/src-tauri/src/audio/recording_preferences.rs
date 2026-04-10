@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Runtime};
+use tauri_plugin_store::StoreExt;
 use log::{info, warn};
 
 #[cfg(target_os = "macos")]
@@ -10,14 +11,27 @@ use anyhow::Result;
 #[cfg(target_os = "macos")]
 use crate::audio::capture::AudioCaptureBackend;
 
+const STORE_FILE: &str = "recording_preferences.json";
+const STORE_KEY: &str = "recording_prefs";
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecordingPreferences {
     pub save_folder: PathBuf,
     pub auto_save: bool,
     pub file_format: String,
+    #[serde(default)]
+    pub preferred_mic_device: Option<String>,
+    #[serde(default)]
+    pub preferred_system_device: Option<String>,
+    #[serde(default = "default_recording_mode")]
+    pub recording_mode: String,
     #[cfg(target_os = "macos")]
     #[serde(default)]
     pub system_audio_backend: Option<String>,
+}
+
+fn default_recording_mode() -> String {
+    "system-audio-only".to_string()
 }
 
 impl Default for RecordingPreferences {
@@ -26,6 +40,9 @@ impl Default for RecordingPreferences {
             save_folder: get_default_recordings_folder(),
             auto_save: true,
             file_format: "mp4".to_string(),
+            preferred_mic_device: None,
+            preferred_system_device: None,
+            recording_mode: default_recording_mode(),
             #[cfg(target_os = "macos")]
             system_audio_backend: Some("coreaudio".to_string()),
         }
@@ -36,14 +53,12 @@ impl Default for RecordingPreferences {
 pub fn get_default_recordings_folder() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
-        // Windows: %USERPROFILE%\Music\meetily-recordings
-        if let Some(music_dir) = dirs::audio_dir() {
-            music_dir.join("meetily-recordings")
+        // Windows: C:\Users\<UserName>\AppData\Roaming\meetily-recordings
+        if let Some(config_dir) = dirs::config_dir() {
+            config_dir.join("meetily-recordings")
         } else {
-            // Fallback to Documents if Music folder is not available
-            dirs::document_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("meetily-recordings")
+            // Fallback: 如果抓不到路徑，則在當前目錄建立
+            PathBuf::from(".").join("meetily-recordings")
         }
     }
 
@@ -88,36 +103,60 @@ pub fn generate_recording_filename(format: &str) -> String {
 
 /// Load recording preferences from store
 pub async fn load_recording_preferences<R: Runtime>(
-    _app: &AppHandle<R>,
+    app: &AppHandle<R>,
 ) -> Result<RecordingPreferences> {
-    // Try to load from Tauri store, fallback to defaults
-    // For now, return defaults - can be enhanced to use tauri-plugin-store
-    #[cfg(target_os = "macos")]
-    let prefs = {
-        let mut p = RecordingPreferences::default();
-        let backend = crate::audio::capture::get_current_backend();
-        p.system_audio_backend = Some(backend.to_string());
-        p
+    let mut prefs = match app.store(STORE_FILE) {
+        Ok(store) => {
+            match store.get(STORE_KEY) {
+                Some(value) => {
+                    serde_json::from_value::<RecordingPreferences>(value.clone())
+                        .unwrap_or_else(|e| {
+                            warn!("Failed to deserialize stored preferences, using defaults: {}", e);
+                            RecordingPreferences::default()
+                        })
+                }
+                None => RecordingPreferences::default(),
+            }
+        }
+        Err(e) => {
+            warn!("Failed to open store, using defaults: {}", e);
+            RecordingPreferences::default()
+        }
     };
 
-    #[cfg(not(target_os = "macos"))]
-    let prefs = RecordingPreferences::default();
+    #[cfg(target_os = "macos")]
+    {
+        let backend = crate::audio::capture::get_current_backend();
+        prefs.system_audio_backend = Some(backend.to_string());
+    }
 
-    info!("Loaded recording preferences: save_folder={:?}, auto_save={}, format={}",
-          prefs.save_folder, prefs.auto_save, prefs.file_format);
+    info!("Loaded recording preferences: save_folder={:?}, auto_save={}, format={}, recording_mode={}, mic={:?}, system={:?}",
+          prefs.save_folder, prefs.auto_save, prefs.file_format,
+          prefs.recording_mode, prefs.preferred_mic_device, prefs.preferred_system_device);
     Ok(prefs)
 }
 
 /// Save recording preferences to store
 pub async fn save_recording_preferences<R: Runtime>(
-    _app: &AppHandle<R>,
+    app: &AppHandle<R>,
     preferences: &RecordingPreferences,
 ) -> Result<()> {
-    // For now, just log - can be enhanced to use tauri-plugin-store
-    info!("Saving recording preferences: save_folder={:?}, auto_save={}, format={}",
-          preferences.save_folder, preferences.auto_save, preferences.file_format);
+    info!("Saving recording preferences: save_folder={:?}, auto_save={}, format={}, recording_mode={}, mic={:?}, system={:?}",
+          preferences.save_folder, preferences.auto_save, preferences.file_format,
+          preferences.recording_mode, preferences.preferred_mic_device, preferences.preferred_system_device);
 
-    // Save backend preference to global config
+    match app.store(STORE_FILE) {
+        Ok(store) => {
+            let value = serde_json::to_value(preferences)?;
+            store.set(STORE_KEY, value);
+            store.save()?;
+        }
+        Err(e) => {
+            warn!("Failed to open store for saving: {}", e);
+            return Err(anyhow::anyhow!("Failed to open store: {}", e));
+        }
+    }
+
     #[cfg(target_os = "macos")]
     if let Some(backend_str) = &preferences.system_audio_backend {
         if let Some(backend) = AudioCaptureBackend::from_string(backend_str) {
@@ -126,7 +165,6 @@ pub async fn save_recording_preferences<R: Runtime>(
         }
     }
 
-    // Ensure the directory exists
     ensure_recordings_directory(&preferences.save_folder)?;
 
     Ok(())

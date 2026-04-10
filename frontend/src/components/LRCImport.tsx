@@ -89,7 +89,7 @@ export function LRCImport({ onImport, disabled = false }: LRCImportProps) {
     } catch (error) {
       console.error('Failed to import LRC file:', error);
       toast.error('Failed to import LRC file', {
-        description: error instanceof Error ? error.message : 'Unknown error occurred'
+        description: error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
       });
     } finally {
       setIsProcessing(false);

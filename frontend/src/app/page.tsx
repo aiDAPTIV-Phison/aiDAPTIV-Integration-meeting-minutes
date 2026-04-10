@@ -90,53 +90,11 @@ export default function Home() {
   const [isSavingTranscript, setIsSavingTranscript] = useState(false);
   const [isRecordingDisabled, setIsRecordingDisabled] = useState(false);
 
-  // Load selectedDevices from localStorage on initialization
-  const loadSelectedDevicesFromStorage = (): SelectedDevices => {
-    if (typeof window === 'undefined') {
-      return {
-        micDevice: null,
-        systemDevice: null,
-        recordingMode: DEFAULT_RECORDING_MODE
-      };
-    }
-
-    try {
-      const stored = localStorage.getItem('selectedDevices');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Validate the structure
-        if (parsed && typeof parsed === 'object') {
-          return {
-            micDevice: parsed.micDevice ?? null,
-            systemDevice: parsed.systemDevice ?? null,
-            recordingMode: parsed.recordingMode ?? DEFAULT_RECORDING_MODE
-          };
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load selectedDevices from localStorage:', error);
-    }
-
-    return {
-      micDevice: null,
-      systemDevice: null,
-      recordingMode: DEFAULT_RECORDING_MODE
-    };
-  };
-
-  const [selectedDevices, setSelectedDevices] = useState<SelectedDevices>(loadSelectedDevicesFromStorage());
-
-  // Save selectedDevices to localStorage whenever it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('selectedDevices', JSON.stringify(selectedDevices));
-        console.log('🔍 [page.tsx] Saved selectedDevices to localStorage:', selectedDevices);
-      } catch (error) {
-        console.error('Failed to save selectedDevices to localStorage:', error);
-      }
-    }
-  }, [selectedDevices]);
+  const [selectedDevices, setSelectedDevices] = useState<SelectedDevices>({
+    micDevice: null,
+    systemDevice: null,
+    recordingMode: DEFAULT_RECORDING_MODE
+  });
   const [showDeviceSettings, setShowDeviceSettings] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [modelSelectorMessage, setModelSelectorMessage] = useState('');
@@ -1012,7 +970,7 @@ export default function Home() {
       }
     };
 
-    // Add a small delay to ensure selectedDevices is loaded from localStorage
+    // Add a small delay to ensure selectedDevices is loaded from backend
     // This is important when page reloads from tray menu
     const timeoutId = setTimeout(() => {
       checkAutoStartRecording();
@@ -1592,25 +1550,23 @@ export default function Home() {
     isRecordingRef.current = recordingState.isRecording;
   }, [recordingState.isRecording]);
 
-  const startAutoSummary = useCallback(() => {
-    console.log(`🚀 Starting auto summary every ${AUTO_SUMMARY_MINUTES} minutes`);
+  const startAutoSummary = useCallback((resume = false) => {
+    const intervalMs = AUTO_SUMMARY_MINUTES * 60 * 1000;
+
+    console.log(`🚀 Starting auto summary every ${AUTO_SUMMARY_MINUTES} minutes${resume ? ' (resuming from previous position)' : ''}`);
 
     // Clear existing timer
     if (autoSummaryInterval) {
       clearInterval(autoSummaryInterval);
     }
 
-    // Set new timer
-    const interval = setInterval(async () => {
+    // Shared summary execution logic — updates anchor time after each trigger
+    const runSummary = async () => {
       try {
-        // Check if recording is active and there are transcripts
         if (isRecordingRef.current && transcriptsRef.current.length > 0) {
-          // Allow auto summary in idle, completed, or error states
-          // Only skip when actively processing (processing, summarizing, regenerating)
           const status = summaryStatusRef.current;
           if (status === 'idle' || status === 'completed' || status === 'error') {
             console.log('🤖 Auto-generating summary...');
-            // Show notification to user
             toast.info(`Auto-generating meeting summary...`, {
               description: `Next auto summary in ${AUTO_SUMMARY_MINUTES} minutes`
             });
@@ -1626,9 +1582,33 @@ export default function Home() {
       } catch (error) {
         console.error('❌ Auto summary failed:', error);
       }
-    }, AUTO_SUMMARY_MINUTES * 60 * 1000);
+      // Anchor to now so the next resume calculates from the last trigger
+      sessionStorage.setItem('autoSummaryStartedAt', Date.now().toString());
+    };
 
-    setAutoSummaryInterval(interval);
+    // Determine delay for first fire
+    let firstDelay = intervalMs;
+    if (resume) {
+      const savedStart = sessionStorage.getItem('autoSummaryStartedAt');
+      if (savedStart) {
+        const elapsed = Date.now() - parseInt(savedStart, 10);
+        const remaining = intervalMs - (elapsed % intervalMs);
+        firstDelay = remaining > 0 ? remaining : intervalMs;
+        console.log(`⏱️ Auto summary resume: elapsed ${Math.round(elapsed / 1000)}s, next trigger in ${Math.round(firstDelay / 1000)}s`);
+      }
+    } else {
+      // Fresh start — record the anchor time now
+      sessionStorage.setItem('autoSummaryStartedAt', Date.now().toString());
+    }
+
+    // Use setTimeout for the first (possibly partial) interval, then switch to setInterval
+    const timeoutHandle = setTimeout(async () => {
+      await runSummary();
+      const regularInterval = setInterval(runSummary, intervalMs);
+      setAutoSummaryInterval(regularInterval);
+    }, firstDelay);
+
+    setAutoSummaryInterval(timeoutHandle);
   }, [autoSummaryInterval, AUTO_SUMMARY_MINUTES]);
 
   const stopAutoSummary = useCallback(() => {
@@ -1637,7 +1617,23 @@ export default function Home() {
       clearInterval(autoSummaryInterval);
       setAutoSummaryInterval(null);
     }
+    sessionStorage.removeItem('autoSummaryStartedAt');
   }, [autoSummaryInterval]);
+
+  // Resume auto summary timer when navigating back to home during an active recording.
+  // The timer lives in local component state and is cleared on unmount (e.g. going to Settings).
+  // Pass resume=true so the timer continues from where it left off instead of resetting.
+  useEffect(() => {
+    if (
+      recordingState.isRecording &&
+      autoSummaryInterval === null &&
+      !isStopping &&
+      !isProcessingTranscript
+    ) {
+      console.log('🔄 Recording active but no auto summary timer — resuming after navigation');
+      startAutoSummary(true);
+    }
+  }, [recordingState.isRecording, autoSummaryInterval, startAutoSummary, isStopping, isProcessingTranscript]);
 
   const handleSummary = useCallback((summary: any) => {
     setAiSummary(summary);
@@ -2038,17 +2034,18 @@ export default function Home() {
     fetchModelConfig();
   }, []);
 
-  // Load device preferences on startup
+  // Load device preferences on startup from Rust backend (single source of truth)
   useEffect(() => {
     const loadDevicePreferences = async () => {
       try {
         const prefs = await invoke('get_recording_preferences') as any;
-        if (prefs && (prefs.preferred_mic_device || prefs.preferred_system_device)) {
+        if (prefs) {
           setSelectedDevices({
-            micDevice: prefs.preferred_mic_device,
-            systemDevice: prefs.preferred_system_device
+            micDevice: prefs.preferred_mic_device ?? null,
+            systemDevice: prefs.preferred_system_device ?? null,
+            recordingMode: prefs.recording_mode ?? DEFAULT_RECORDING_MODE
           });
-          console.log('Loaded device preferences:', prefs);
+          console.log('Loaded device preferences from backend:', prefs);
         }
       } catch (error) {
         console.log('No device preferences found or failed to load:', error);
@@ -2647,7 +2644,20 @@ export default function Home() {
 
                 <div className="mt-6 flex justify-end">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
+                      try {
+                        const prefs = await invoke('get_recording_preferences') as any;
+                        await invoke('set_recording_preferences', {
+                          preferences: {
+                            ...prefs,
+                            preferred_mic_device: selectedDevices.micDevice,
+                            preferred_system_device: selectedDevices.systemDevice,
+                            recording_mode: selectedDevices.recordingMode || DEFAULT_RECORDING_MODE,
+                          }
+                        });
+                      } catch (error) {
+                        console.error('Failed to save device preferences:', error);
+                      }
                       const micDevice = selectedDevices.micDevice || 'Default';
                       const systemDevice = selectedDevices.systemDevice || 'Default';
                       toast.success("Devices selected", {

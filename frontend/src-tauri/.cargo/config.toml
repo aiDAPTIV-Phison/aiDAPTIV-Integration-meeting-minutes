@@ -11,3 +11,20 @@ rustflags = [
 [env]
 MACOSX_DEPLOYMENT_TARGET = { value = "14.2", force = true }
 CMAKE_OSX_DEPLOYMENT_TARGET = "14.2"
+
+# 在現有內容後面加入
+
+# Force Cargo to always skip ort-sys download in this project
+ORT_SKIP_DOWNLOAD = "1"
+
+# Set the root directory for the ONNX library
+ORT_LIB_LOCATION = "R:\\Jenson\\meeting-minutes\\onnxruntime-win-x64-1.23.0\\onnxruntime-win-x64-1.23.0\\lib"
+ORT_LIB_PROFILE = "release"
+ORT_PREFER_DYNAMIC_LINK = "1"
+
+# Windows network: Fix SSL certificate revocation check issues
+[net]
+git-fetch-with-cli = true
+
+[http]
+check-revoke = false

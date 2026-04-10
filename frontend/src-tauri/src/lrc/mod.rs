@@ -106,8 +106,11 @@ pub fn parse_lrc(content: &str) -> Result<LrcParseResult, String> {
                 continue;
             }
 
-            // Convert to total seconds
-            let time_seconds = (minutes * 60) as f64
+            // Convert to total seconds (checked_mul guards against u32 overflow in debug mode)
+            let minutes_as_secs = minutes.checked_mul(60).ok_or_else(|| {
+                format!("Timestamp minutes overflow: {}", minutes)
+            })?;
+            let time_seconds = minutes_as_secs as f64
                 + seconds as f64
                 + (centiseconds as f64 / 100.0);
 
@@ -118,8 +121,9 @@ pub fn parse_lrc(content: &str) -> Result<LrcParseResult, String> {
         }
     }
 
-    // Sort by time (in case lines are out of order)
-    lines.sort_by(|a, b| a.time_seconds.partial_cmp(&b.time_seconds).unwrap());
+    // Sort by time (in case lines are out of order).
+    // total_cmp is NaN-safe and never panics unlike partial_cmp().unwrap().
+    lines.sort_by(|a, b| a.time_seconds.total_cmp(&b.time_seconds));
 
     if lines.is_empty() {
         return Err("No valid LRC lines found in file".to_string());
@@ -191,6 +195,48 @@ mod tests {
         let content = "";
         let result = parse_lrc(content);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_out_of_order_timestamps() {
+        let content = r#"
+[00:20.00]Third line
+[00:05.00]First line
+[00:12.00]Second line
+        "#;
+
+        let result = parse_lrc(content).unwrap();
+        assert_eq!(result.lines.len(), 3);
+        assert_eq!(result.lines[0].time_seconds, 5.0);
+        assert_eq!(result.lines[0].text, "First line");
+        assert_eq!(result.lines[1].time_seconds, 12.0);
+        assert_eq!(result.lines[1].text, "Second line");
+        assert_eq!(result.lines[2].time_seconds, 20.0);
+        assert_eq!(result.lines[2].text, "Third line");
+    }
+
+    #[test]
+    fn test_parse_duplicate_timestamps() {
+        let content = r#"
+[00:10.00]Line A
+[00:10.00]Line B
+[00:15.00]Line C
+        "#;
+
+        let result = parse_lrc(content).unwrap();
+        assert_eq!(result.lines.len(), 3);
+        assert_eq!(result.lines[0].time_seconds, 10.0);
+        assert_eq!(result.lines[1].time_seconds, 10.0);
+        assert_eq!(result.lines[2].time_seconds, 15.0);
+    }
+
+    #[test]
+    fn test_parse_minutes_overflow() {
+        // u32::MAX / 60 + 1 would overflow; use a value that triggers checked_mul error
+        let content = "[4294967295:00.00]Overflow line";
+        let result = parse_lrc(content);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("overflow"));
     }
 }
 

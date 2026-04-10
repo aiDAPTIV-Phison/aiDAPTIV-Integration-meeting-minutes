@@ -548,14 +548,25 @@ impl WhisperEngine {
         // Configure with adaptive settings
         // If language is "auto" or None, use automatic language detection (pass None)
         // If language is "auto-translate", enable translation to English
+        // If language is "zh-TW", map to "zh" for Whisper but inject Traditional Chinese initial_prompt
         // Otherwise, use the specified language code
         let (language_code, should_translate) = match language.as_deref() {
             Some("auto") | None => (None, false),
             Some("auto-translate") => (None, true),
+            Some("zh-TW") => (Some("zh"), false),
             Some(lang) => (Some(lang), false),
         };
         params.set_language(language_code);
         params.set_translate(should_translate);
+
+        // Guide Whisper decoder toward Traditional Chinese characters via initial_prompt.
+        // Whisper has no zh-TW language code; "zh" defaults to Simplified Chinese.
+        // Seeding with Traditional Chinese tokens shifts token probability toward zh-Hant output.
+        if language.as_deref() == Some("zh-TW") {
+            params.set_initial_prompt(
+                "以下是繁體中文的逐字稿。請使用繁體中文字元輸出，例如：台灣、資料、處理、語言、學習。",
+            );
+        }
 
         // CRITICAL: Disable timestamp tokens to prevent whisper.cpp chunking heuristics
         // The "single timestamp ending - skip entire chunk" optimization incorrectly discards
@@ -665,14 +676,25 @@ impl WhisperEngine {
         // Configure for good quality
         // If language is "auto" or None, use automatic language detection (pass None)
         // If language is "auto-translate", enable translation to English
+        // If language is "zh-TW", map to "zh" for Whisper but inject Traditional Chinese initial_prompt
         // Otherwise, use the specified language code
         let (language_code, should_translate) = match language.as_deref() {
             Some("auto") | None => (None, false),
             Some("auto-translate") => (None, true),
+            Some("zh-TW") => (Some("zh"), false),
             Some(lang) => (Some(lang), false),
         };
         params.set_language(language_code);
         params.set_translate(should_translate);
+
+        // Guide Whisper decoder toward Traditional Chinese characters via initial_prompt.
+        // Whisper has no zh-TW language code; "zh" defaults to Simplified Chinese.
+        // Seeding with Traditional Chinese tokens shifts token probability toward zh-Hant output.
+        if language.as_deref() == Some("zh-TW") {
+            params.set_initial_prompt(
+                "以下是繁體中文的逐字稿。請使用繁體中文字元輸出，例如：台灣、資料、處理、語言、學習。",
+            );
+        }
 
         // CRITICAL: Disable timestamp tokens to prevent whisper.cpp chunking heuristics
         // The "single timestamp ending - skip entire chunk" optimization incorrectly discards

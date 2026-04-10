@@ -1,8 +1,8 @@
 {
     "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-    "productName": "meetily",
-    "version": "0.1.1",
-    "identifier": "com.meetily.ai",
+    "productName": "aiDAPTIV Meetily",
+    "version": "1.0.1",
+    "identifier": "com.aidaptiv.meetily",
     "build": {
         "frontendDist": "../out",
         "devUrl": "http://localhost:3118",
@@ -12,7 +12,7 @@
 
     "app": {
         "windows": [{
-            "title": "meetily",
+            "title": "aiDAPTIV Meetily",
             "width": 1100,
             "height": 700,
             "resizable": true,
@@ -68,15 +68,37 @@
         }
     },
     "bundle": {
+        "windows": {
+            "certificateThumbprint": "0a4175c37d598d21b9cf8b1bfec84785972c6608",
+            "digestAlgorithm": "sha256",
+            "timestampUrl": "http://timestamp.digicert.com",
+            "nsis": {
+                "installerIcon": "icons/icon.ico",
+                "headerImage": null,
+                "sidebarImage": null,
+                "installerHooks": "./installer.nsh"
+            },
+            "webviewInstallMode": {
+                "type": "downloadBootstrapper"
+            }
+        },
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
         "active": true,
         "targets": "all",
-        "icon": [
-            "icons/icon.png",
-            "icons/app_icon.icns",
-            "icons/app_icon.ico"
-        ],
+        "category": "Business",
+        "shortDescription": "",
+        "longDescription": "",
+        "copyright": "",
         "resources": [
-            "templates/*.json"
+            "templates/*.json",
+            "onnxruntime.dll",
+            "vulkan-1.dll"
         ]
     }
 }
