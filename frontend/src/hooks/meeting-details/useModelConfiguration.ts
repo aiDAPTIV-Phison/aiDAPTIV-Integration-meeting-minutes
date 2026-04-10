@@ -19,6 +19,7 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
     llamacppEndpoint: 'http://127.0.0.1:13141/v1'
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [hasConfiguredModel, setHasConfiguredModel] = useState(false);
   const [, setError] = useState<string>('');
 
   // Fetch model configuration on mount and when serverAddress changes
@@ -48,8 +49,10 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
             }
           }
           setModelConfig(data);
+          setHasConfiguredModel(true);
         } else {
           console.warn('⚠️ No model config found in database, using defaults');
+          setHasConfiguredModel(false);
         }
       } catch (error) {
         console.error('❌ Failed to fetch model config:', error);
@@ -120,6 +123,7 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
 
       console.log('Save model config success');
       setModelConfig(payload);
+      setHasConfiguredModel(true);
 
       // Emit event to sync other components
       const { emit } = await import('@tauri-apps/api/event');
@@ -144,5 +148,6 @@ export function useModelConfiguration({ serverAddress }: UseModelConfigurationPr
     setModelConfig,
     handleSaveModelConfig,
     isLoading,
+    hasConfiguredModel,
   };
 }

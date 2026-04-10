@@ -36,6 +36,7 @@ interface ChatPanelProps {
   setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
   onSaveModelConfig: (config?: ModelConfig) => Promise<void>;
   isModelConfigLoading?: boolean;
+  hasConfiguredModel?: boolean;
   aiSummary: Summary | null;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
   // Props needed for the full summary view dialog
@@ -77,6 +78,7 @@ interface Message {
   content: string;
   timestamp: Date;
   ttft_us?: number; // Time To First Token in microseconds (1 ms = 1000 μs)
+  reasoning_content?: string; // Accumulated reasoning/thinking text (ephemeral, not persisted)
 }
 
 interface MeetingContext {
@@ -93,6 +95,7 @@ export function ChatPanel({
   setModelConfig,
   onSaveModelConfig,
   isModelConfigLoading = false,
+  hasConfiguredModel = true,
   aiSummary,
   summaryStatus,
   summaryPanelProps
@@ -104,6 +107,7 @@ export function ChatPanel({
   const [isNoteExpanded, setIsNoteExpanded] = useState(true);
   const [isFullSummaryOpen, setIsFullSummaryOpen] = useState(false);
   const streamingContentRef = useRef('');
+  const streamingReasoningRef = useRef('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -188,19 +192,23 @@ export function ChatPanel({
     let errorUnlisten: UnlistenFn | null = null;
 
     const setupListeners = async () => {
-      // Listen for streaming tokens
+      // Listen for streaming tokens (supports both reasoning and content types)
       tokenUnlisten = await listen('llm:chat:token', (event: any) => {
-        const { request_id, content_delta } = event.payload;
+        const { request_id, content_delta, token_type } = event.payload;
         if (request_id === meeting.id) {
-          streamingContentRef.current += content_delta;
+          if (token_type === 'reasoning') {
+            streamingReasoningRef.current += content_delta;
+          } else {
+            streamingContentRef.current += content_delta;
+          }
 
-          // Update the last message with accumulated content
           setMessages(prev => {
             const newMessages = [...prev];
             if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'assistant') {
               newMessages[newMessages.length - 1] = {
                 ...newMessages[newMessages.length - 1],
-                content: streamingContentRef.current
+                content: streamingContentRef.current,
+                reasoning_content: streamingReasoningRef.current || undefined,
               };
             }
             return newMessages;
@@ -224,7 +232,8 @@ export function ChatPanel({
 
               const lastMessage: Message = {
                 ...newMessages[newMessages.length - 1],
-                content: finalContent
+                content: finalContent,
+                reasoning_content: streamingReasoningRef.current || undefined,
               };
               if (ttft_us !== undefined) {
                 lastMessage.ttft_us = ttft_us;
@@ -272,6 +281,7 @@ export function ChatPanel({
           });
           setIsLoading(false);
           streamingContentRef.current = '';
+          streamingReasoningRef.current = '';
 
           // Remove the placeholder assistant message on error
           setMessages(prev => {
@@ -370,6 +380,7 @@ export function ChatPanel({
 
     // Reset streaming content
     streamingContentRef.current = '';
+    streamingReasoningRef.current = '';
 
     try {
       // Build message history (only user/assistant messages, no system prompt)
@@ -520,9 +531,7 @@ export function ChatPanel({
                         onRememberPreferenceToggle={summaryPanelProps.onRememberPreferenceToggle}
                         hasTranscripts={summaryPanelProps.transcripts.length > 0}
                         isModelConfigLoading={isModelConfigLoading}
-                        // onChatClick={() => {
-                        //     setIsFullSummaryOpen(false);
-                        //   }}
+                        hasConfiguredModel={hasConfiguredModel}
                         />
                     </div>
 
@@ -789,9 +798,25 @@ export function ChatPanel({
                       : 'bg-gray-100 text-gray-900'
                   }`}
                 >
+                  {/* Reasoning block (collapsible) */}
+                  {message.role === 'assistant' && message.reasoning_content && (
+                    <details className="mb-2 border border-gray-200 rounded bg-gray-50/50">
+                      <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-gray-500 hover:text-gray-700 select-none">
+                        {isLoading && messages[messages.length - 1]?.id === message.id
+                          ? '⏳ Thinking...'
+                          : `💭 Reasoning (${message.reasoning_content.length} chars)`
+                        }
+                      </summary>
+                      <div className="px-2 py-1 text-xs text-gray-500 whitespace-pre-wrap max-h-60 overflow-y-auto border-t border-gray-200">
+                        {message.reasoning_content}
+                      </div>
+                    </details>
+                  )}
                   <div className="text-sm whitespace-pre-wrap">
-                    {isLoading && !message.content ? (
+                    {isLoading && !message.content && !message.reasoning_content ? (
                       <span className="text-gray-400 italic">Waiting for response...</span>
+                    ) : isLoading && !message.content && message.reasoning_content ? (
+                      <span className="text-gray-400 italic">Generating answer...</span>
                     ) : message.content === '<empty content>' ? (
                       <span className="text-gray-400 italic">&lt;empty content&gt;</span>
                     ) : (

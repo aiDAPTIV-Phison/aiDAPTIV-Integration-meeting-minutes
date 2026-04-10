@@ -54,6 +54,7 @@ interface SummaryPanelProps {
   onLanguageSelect: (languageCode: string) => void;
   onRememberPreferenceToggle: (remember: boolean) => void;
   isModelConfigLoading?: boolean;
+  hasConfiguredModel?: boolean;
 }
 
 // Helper function to format time (microseconds to human-readable)
@@ -109,7 +110,8 @@ export function SummaryPanel({
   onTemplateSelect,
   onLanguageSelect,
   onRememberPreferenceToggle,
-  isModelConfigLoading = false
+  isModelConfigLoading = false,
+  hasConfiguredModel = true
 }: SummaryPanelProps) {
   const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
   const [showChat, setShowChat] = useState(false);
@@ -139,6 +141,7 @@ export function SummaryPanel({
             setModelConfig={setModelConfig}
             onSaveModelConfig={onSaveModelConfig}
             isModelConfigLoading={isModelConfigLoading}
+            hasConfiguredModel={hasConfiguredModel}
             aiSummary={aiSummary}
             summaryStatus={summaryStatus}
             summaryPanelProps={{
@@ -210,6 +213,7 @@ export function SummaryPanel({
                 onRememberPreferenceToggle={onRememberPreferenceToggle}
                 hasTranscripts={transcripts.length > 0}
                 isModelConfigLoading={isModelConfigLoading}
+                hasConfiguredModel={hasConfiguredModel}
                 onChatClick={() => setShowChat(true)}
               />
             </div>
@@ -253,6 +257,7 @@ export function SummaryPanel({
               onRememberPreferenceToggle={onRememberPreferenceToggle}
               hasTranscripts={transcripts.length > 0}
               isModelConfigLoading={isModelConfigLoading}
+              hasConfiguredModel={hasConfiguredModel}
               onChatClick={() => setShowChat(true)}
             />
           </div>
@@ -284,6 +289,7 @@ export function SummaryPanel({
               onRememberPreferenceToggle={onRememberPreferenceToggle}
               hasTranscripts={transcripts.length > 0}
               isModelConfigLoading={isModelConfigLoading}
+              hasConfiguredModel={hasConfiguredModel}
               onChatClick={() => setShowChat(true)}
             />
           </div>

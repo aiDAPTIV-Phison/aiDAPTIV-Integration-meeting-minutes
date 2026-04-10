@@ -1,6 +1,10 @@
 MIT License
 
+Copyright (c) 2026 aiDAPTIV
 Copyright (c) 2024 Zackriya Solutions
+
+This software is a fork of Meetily (https://github.com/Zackriya-Solutions/meeting-minutes)
+by Zackriya Solutions, used under the MIT License.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

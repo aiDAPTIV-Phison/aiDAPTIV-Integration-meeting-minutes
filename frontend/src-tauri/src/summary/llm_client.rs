@@ -13,6 +13,13 @@ use tauri::{Emitter, Runtime};
 pub struct StreamTokenPayload {
     pub request_id: String,
     pub content_delta: String,
+    /// "reasoning" for thinking/reasoning tokens, "content" for answer tokens
+    #[serde(default = "default_token_type")]
+    pub token_type: String,
+}
+
+fn default_token_type() -> String {
+    "content".to_string()
 }
 
 /// Streaming completion event payload (sent once at the end)
@@ -216,6 +223,8 @@ pub struct StreamDelta {
     pub content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -783,19 +792,24 @@ async fn _generate_summary_streaming(
                             // Parse JSON chunk
                             match serde_json::from_str::<StreamChatChunk>(data) {
                                 Ok(parsed_chunk) => {
-                                    // Extract content delta
                                     if let Some(choice) = parsed_chunk.choices.first() {
+                                        // Record TTFT from first reasoning or content token
+                                        if !first_token_received {
+                                            let has_reasoning = choice.delta.reasoning_content
+                                                .as_ref().map_or(false, |r| !r.is_empty());
+                                            let has_content = choice.delta.content
+                                                .as_ref().map_or(false, |c| !c.is_empty());
+                                            if has_reasoning || has_content {
+                                                first_token_received = true;
+                                                ttft_us = Some(request_start_time.elapsed().as_micros() as u64);
+                                                info!("⏱️ First token received for summary: {:.2}ms",
+                                                      ttft_us.unwrap() as f64 / 1000.0);
+                                            }
+                                        }
+
+                                        // Only accumulate content (skip reasoning for summary output)
                                         if let Some(content) = &choice.delta.content {
                                             if !content.is_empty() {
-                                                // Calculate TTFT on first token
-                                                if !first_token_received {
-                                                    first_token_received = true;
-                                                    ttft_us = Some(request_start_time.elapsed().as_micros() as u64);
-                                                    info!("⏱️ First token received for summary: {:.2}ms",
-                                                          ttft_us.unwrap() as f64 / 1000.0);
-                                                }
-
-                                                // Accumulate content internally
                                                 accumulated_content.push_str(content);
                                             }
                                         }
@@ -1234,35 +1248,50 @@ async fn stream_chat_openai_compatible<R: Runtime>(
                             // Parse JSON chunk
                             match serde_json::from_str::<StreamChatChunk>(data) {
                                 Ok(parsed_chunk) => {
-                                    // Extract content delta
                                     if let Some(choice) = parsed_chunk.choices.first() {
-                                        if let Some(content) = &choice.delta.content {
-                                            if !content.is_empty() {
-                                                // Calculate TTFT on first token
+                                        // Handle reasoning_content delta (thinking/reasoning tokens)
+                                        if let Some(reasoning) = &choice.delta.reasoning_content {
+                                            if !reasoning.is_empty() {
                                                 if !first_token_received {
                                                     first_token_received = true;
-                                                    // Calculate TTFT in microseconds for higher precision
                                                     ttft_us = Some(request_start_time.elapsed().as_micros() as u64);
                                                 }
 
-                                                // Emit token event
                                                 let _ = app.emit(
                                                     "llm:chat:token",
                                                     StreamTokenPayload {
                                                         request_id: request_id.clone(),
-                                                        content_delta: content.clone(),
+                                                        content_delta: reasoning.clone(),
+                                                        token_type: "reasoning".to_string(),
                                                     },
                                                 );
                                             }
                                         }
 
-                                        // Capture finish reason
+                                        // Handle content delta (answer tokens)
+                                        if let Some(content) = &choice.delta.content {
+                                            if !content.is_empty() {
+                                                if !first_token_received {
+                                                    first_token_received = true;
+                                                    ttft_us = Some(request_start_time.elapsed().as_micros() as u64);
+                                                }
+
+                                                let _ = app.emit(
+                                                    "llm:chat:token",
+                                                    StreamTokenPayload {
+                                                        request_id: request_id.clone(),
+                                                        content_delta: content.clone(),
+                                                        token_type: "content".to_string(),
+                                                    },
+                                                );
+                                            }
+                                        }
+
                                         if let Some(reason) = &choice.finish_reason {
                                             finish_reason = Some(reason.clone());
                                         }
                                     }
 
-                                    // Capture usage stats
                                     if let Some(usage) = parsed_chunk.usage {
                                         usage_stats = Some(StreamUsage {
                                             prompt_tokens: usage.prompt_tokens,
@@ -1435,18 +1464,17 @@ async fn stream_chat_claude<R: Runtime>(
                                         }
                                     }
                                     ClaudeStreamEvent::ContentBlockDelta { delta } => {
-                                        // Calculate TTFT on first token
                                         if !first_token_received && !delta.text.is_empty() {
                                             first_token_received = true;
                                             ttft_us = Some(request_start_time.elapsed().as_micros() as u64);
                                         }
 
-                                        // Emit token event
                                         let _ = app.emit(
                                             "llm:chat:token",
                                             StreamTokenPayload {
                                                 request_id: request_id.clone(),
                                                 content_delta: delta.text.clone(),
+                                                token_type: "content".to_string(),
                                             },
                                         );
                                     }
