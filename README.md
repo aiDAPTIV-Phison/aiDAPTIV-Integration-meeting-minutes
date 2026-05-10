@@ -34,6 +34,39 @@ aiDAPTIV Meetily is a privacy-first AI meeting assistant that runs entirely on y
 2. Right-click the downloaded file → **Properties** → Check **Unblock** → Click **OK**
 3. Run the installer (if Windows shows a security warning: Click **More info** → **Run anyway**)
 
+#### Install via Scoop
+
+Run the following commands in **PowerShell**:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+scoop bucket add aidaptiv https://github.com/aiDAPTIV-Phison/aiDAPTIV-app-store-bucket
+scoop install aidaptiv/aidaptiv-meetily
+```
+
+#### Usage (Scoop Install)
+
+After installation, the app is located at:
+
+- `%USERPROFILE%\scoop\apps\aidaptiv-meetily\current`
+
+Before starting Meetily, make sure your local LLM service is running and listening on port `13141`.
+
+Run the following commands in **PowerShell**:
+
+```powershell
+cd "$env:USERPROFILE\scoop\apps\aidaptiv-meetily\current"
+.\start.ps1
+```
+
+To stop the app:
+
+```powershell
+cd "$env:USERPROFILE\scoop\apps\aidaptiv-meetily\current"
+.\stop.ps1
+```
+
 ### Build from Source (Linux / macOS / Windows)
 
 ```bash
